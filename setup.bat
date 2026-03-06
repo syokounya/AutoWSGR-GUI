@@ -3,7 +3,6 @@ setlocal EnableDelayedExpansion
 
 set "SCRIPT_DIR=%~dp0"
 set "PYTHON_VERSION=3.12.8"
-set "PYTHON_INSTALLER=python-%PYTHON_VERSION%-amd64.exe"
 set "BACKEND_REPO=OpenWSGR/AutoWSGR"
 set "BACKEND_BRANCH=main"
 
@@ -15,6 +14,8 @@ if exist "%SCRIPT_DIR%..\AutoWSGR-GUI.exe" (
     set "APP_DIR=%SCRIPT_DIR%"
 )
 
+set "PYTHON_DIR=%APP_DIR%\python"
+set "PYTHON_EXE=%PYTHON_DIR%\python.exe"
 set "TEMP_DIR=%APP_DIR%\_setup_tmp"
 
 echo.
@@ -24,54 +25,73 @@ echo.
 
 if not exist "%TEMP_DIR%" mkdir "%TEMP_DIR%"
 
-:: --- Python ---
+:: --- Python (portable) ---
 echo [1/3] Checking Python...
 
-set "PYTHON_CMD="
+:: Check local portable Python first
+if exist "%PYTHON_EXE%" (
+    for /f "tokens=2 delims= " %%v in ('"%PYTHON_EXE%" --version 2^>^&1') do set "PY_VER=%%v"
+    echo       OK: Local Python !PY_VER!
+    goto :python_ok
+)
+
+:: Check system Python
+set "SYS_PYTHON="
 where python >nul 2>&1
 if %errorlevel%==0 (
     for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do set "PY_VER=%%v"
     for /f "tokens=1,2 delims=." %%a in ("!PY_VER!") do (
         if %%a GEQ 3 if %%b GEQ 12 (
-            set "PYTHON_CMD=python"
-            echo       OK: Python !PY_VER!
+            set "PYTHON_EXE=python"
+            echo       OK: System Python !PY_VER!
+            goto :python_ok
         )
     )
 )
 
-if not defined PYTHON_CMD (
-    echo       Python 3.12+ not found, downloading...
-    set "PY_URL=https://www.python.org/ftp/python/%PYTHON_VERSION%/%PYTHON_INSTALLER%"
-    echo       URL: !PY_URL!
-    curl -L -o "%TEMP_DIR%\%PYTHON_INSTALLER%" "!PY_URL!"
-    if !errorlevel! neq 0 (
-        echo       FAILED: download Python failed
-        goto :error
-    )
-    echo       Installing Python %PYTHON_VERSION%, please check Add to PATH...
-    "%TEMP_DIR%\%PYTHON_INSTALLER%" InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_launcher=1
-    if !errorlevel! neq 0 (
-        echo       FAILED: Python install failed
-        goto :error
-    )
-    set "PATH=%LOCALAPPDATA%\Programs\Python\Python312\Scripts\;%LOCALAPPDATA%\Programs\Python\Python312\;!PATH!"
-    for /f "tokens=*" %%i in ('where python 2^>nul') do set "PYTHON_CMD=%%i"
-    if not defined PYTHON_CMD (
-        set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
-        if not exist "!PYTHON_CMD!" (
-            echo       FAILED: Python not found after install, please restart terminal
-            goto :error
-        )
-    )
-    echo       OK: Python %PYTHON_VERSION% installed
+:: Download portable Python
+echo       Downloading Python %PYTHON_VERSION% portable...
+set "PY_ZIP_URL=https://www.python.org/ftp/python/%PYTHON_VERSION%/python-%PYTHON_VERSION%-embed-amd64.zip"
+echo       URL: !PY_ZIP_URL!
+curl -L -o "%TEMP_DIR%\python-embed.zip" "!PY_ZIP_URL!"
+if !errorlevel! neq 0 (
+    echo       FAILED: download Python failed
+    goto :error
 )
+
+echo       Extracting...
+if not exist "%PYTHON_DIR%" mkdir "%PYTHON_DIR%"
+powershell -NoProfile -Command "Expand-Archive -Path '%TEMP_DIR%\python-embed.zip' -DestinationPath '%PYTHON_DIR%' -Force"
+set "PYTHON_EXE=%PYTHON_DIR%\python.exe"
+
+:: Enable site-packages for pip
+set "PTH_FILE=%PYTHON_DIR%\python312._pth"
+if exist "!PTH_FILE!" (
+    powershell -NoProfile -Command "(Get-Content '!PTH_FILE!') -replace '^#import site','import site' | Set-Content '!PTH_FILE!'"
+)
+
+:: Install pip
+echo       Installing pip...
+curl -sSL -o "%TEMP_DIR%\get-pip.py" "https://bootstrap.pypa.io/get-pip.py"
+if !errorlevel! neq 0 (
+    echo       FAILED: download get-pip.py failed
+    goto :error
+)
+"!PYTHON_EXE!" "%TEMP_DIR%\get-pip.py"
+if !errorlevel! neq 0 (
+    echo       FAILED: pip install failed
+    goto :error
+)
+echo       OK: Python %PYTHON_VERSION% portable installed
+
+:python_ok
 
 :: --- Backend Code ---
 echo [2/3] Checking backend code...
 
 set "BACKEND_DIR=%APP_DIR%\autowsgr"
 if exist "%BACKEND_DIR%\pyproject.toml" (
-    echo       OK: backend code exists at %BACKEND_DIR%
+    echo       OK: backend code exists
 ) else (
     set "BACKEND_ZIP_URL=https://github.com/%BACKEND_REPO%/archive/refs/heads/%BACKEND_BRANCH%.zip"
     echo       Downloading from: !BACKEND_ZIP_URL!
@@ -93,8 +113,8 @@ if exist "%BACKEND_DIR%\pyproject.toml" (
 echo [3/3] Installing Python dependencies...
 
 pushd "%APP_DIR%"
-"!PYTHON_CMD!" -m pip install --upgrade pip 2>nul
-"!PYTHON_CMD!" -m pip install -e "./autowsgr"
+"!PYTHON_EXE!" -m pip install --upgrade pip 2>nul
+"!PYTHON_EXE!" -m pip install -e "./autowsgr"
 if !errorlevel! neq 0 (
     echo       FAILED: pip install failed
     popd

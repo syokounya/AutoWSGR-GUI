@@ -32,3 +32,4 @@ release/
 # 安装临时文件
 _setup_tmp/
 node/
+python/

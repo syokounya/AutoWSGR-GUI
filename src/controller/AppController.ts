@@ -59,6 +59,7 @@ interface ElectronBridge {
   pullUpdates: () => Promise<{ success: boolean; output: string }>;
   startBackend: () => Promise<{ success: boolean; message: string }>;
   runSetup: () => Promise<{ success: boolean; output: string }>;
+  installPortablePython: () => Promise<{ success: boolean }>;
   onBackendLog: (callback: (line: string) => void) => void;
   onSetupLog: (callback: (text: string) => void) => void;
 }
@@ -177,40 +178,41 @@ export class AppController {
     this.waitForBackendAndConnect();
   }
 
-  /** 检查 Python 环境, 缺失时自动运行 setup.bat */
+  /** 检查 Python 环境, 缺失时自动安装本地便携版 */
   private async checkAndPrepareEnv(bridge: ElectronBridge): Promise<boolean> {
     this.appendLocalLog('info', '正在检查运行环境…');
 
     let env = await bridge.checkEnvironment();
 
     if (!env.pythonCmd) {
-      this.appendLocalLog('warn', '未找到 Python，正在运行环境安装脚本…');
-      const setupOk = await this.runSetupScript(bridge);
-      if (!setupOk) {
-        this.appendLocalLog('error', '环境安装失败，请手动运行 setup.bat 或安装 Python 3.12+');
+      // 尝试安装本地便携版 Python
+      if (bridge.installPortablePython) {
+        const result = await bridge.installPortablePython();
+        if (!result.success) {
+          this.appendLocalLog('error', 'Python 安装失败，请手动运行 setup.bat');
+          return false;
+        }
+      } else {
+        this.appendLocalLog('error', '未找到 Python，请安装 Python 3.12+');
         return false;
       }
-      // 重新检查
       env = await bridge.checkEnvironment();
       if (!env.pythonCmd) {
-        this.appendLocalLog('error', '安装后仍未检测到 Python，请重启应用重试');
+        this.appendLocalLog('error', '安装后仍未检测到 Python，请重启应用');
         return false;
       }
     }
 
-    this.appendLocalLog('info', `${env.pythonVersion} ✓`);
-
     if (env.allReady) {
-      this.appendLocalLog('info', '依赖检查通过 ✓');
       return true;
     }
 
     // 缺少依赖，尝试自动安装
-    this.appendLocalLog('warn', `缺少依赖: ${env.missingPackages.join(', ')}，正在自动安装…`);
+    this.appendLocalLog('info', `正在安装缺失依赖: ${env.missingPackages.join(', ')}…`);
     const installResult = await bridge.installDeps();
 
     if (!installResult.success) {
-      this.appendLocalLog('error', `依赖安装失败，请手动运行: pip install -e .`);
+      this.appendLocalLog('error', '依赖安装失败');
       this.appendLocalLog('error', installResult.output.slice(-200));
       return false;
     }
@@ -218,11 +220,10 @@ export class AppController {
     // 重新检查
     env = await bridge.checkEnvironment();
     if (!env.allReady) {
-      this.appendLocalLog('error', `仍缺少依赖: ${env.missingPackages.join(', ')}，请手动运行: pip install -e .`);
+      this.appendLocalLog('error', `仍缺少依赖: ${env.missingPackages.join(', ')}`);
       return false;
     }
 
-    this.appendLocalLog('info', '依赖安装完成 ✓');
     return true;
   }
 

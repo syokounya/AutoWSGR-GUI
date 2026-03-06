@@ -63,32 +63,8 @@ function createWindow(): BrowserWindow {
     icon: path.join(isPackaged() ? process.resourcesPath : path.join(__dirname, '..', '..'), 'resource', 'images', 'logo.png'),
   });
 
-  // 使用 app.getAppPath() 获取 asar/项目根目录，确保开发和打包模式都正确
   const appDir = app.getAppPath();
   const htmlPath = path.join(appDir, 'src', 'view', 'index.html');
-  console.log('[Main] appDir:', appDir);
-  console.log('[Main] htmlPath:', htmlPath);
-  console.log('[Main] __dirname:', __dirname);
-  console.log('[Main] isPackaged:', isPackaged());
-
-  // 打包模式下: 校验 HTML 文件是否存在，用对话框显示诊断信息
-  if (isPackaged()) {
-    const htmlExists = fs.existsSync(htmlPath);
-    if (!htmlExists) {
-      let debugInfo = `HTML not found!\nPath: ${htmlPath}\nappDir: ${appDir}`;
-      try {
-        const topFiles = fs.readdirSync(appDir);
-        debugInfo += `\n\nFiles in appDir:\n${topFiles.join(', ')}`;
-        const srcDir = path.join(appDir, 'src');
-        if (fs.existsSync(srcDir)) {
-          debugInfo += `\n\nsrc/: ${fs.readdirSync(srcDir).join(', ')}`;
-        }
-      } catch (e) {
-        debugInfo += `\nreaddir error: ${e}`;
-      }
-      dialog.showMessageBox({ type: 'error', title: 'Debug', message: debugInfo });
-    }
-  }
 
   win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     const msg = `Page load failed!\nCode: ${errorCode}\nDesc: ${errorDescription}\nURL: ${validatedURL}\nPath: ${htmlPath}`;
@@ -104,11 +80,6 @@ function createWindow(): BrowserWindow {
       dialog.showMessageBox({ type: 'error', title: 'loadFile Error', message: `${err.message}\nPath: ${htmlPath}` });
     }
   });
-
-  // 打包模式下临时打开 DevTools 以便调试
-  if (isPackaged()) {
-    win.webContents.openDevTools();
-  }
 
   mainWindow = win;
   win.on('closed', () => { mainWindow = null; });
@@ -284,6 +255,10 @@ ipcMain.handle('run-setup', async () => {
   return runSetupScript();
 });
 
+ipcMain.handle('install-portable-python', async () => {
+  return installPortablePython();
+});
+
 ipcMain.handle('pull-updates', async () => {
   return pullUpdates();
 });
@@ -300,11 +275,21 @@ ipcMain.handle('start-backend', async () => {
 
 let backendProcess: ChildProcess | null = null;
 
+/** 向渲染进程发送环境检查进度 */
+function sendProgress(msg: string): void {
+  mainWindow?.webContents.send('backend-log', msg);
+}
+
 /** 确保后端代码已就绪 (git submodule 或 curl 下载) */
 async function ensureSubmodule(): Promise<void> {
   const submodDir = path.join(appRoot(), 'autowsgr');
   const marker = path.join(submodDir, 'pyproject.toml');
-  if (fs.existsSync(marker)) return;
+  if (fs.existsSync(marker)) {
+    sendProgress('后端代码已就绪 ✓');
+    return;
+  }
+
+  sendProgress('正在下载后端代码…');
 
   // 先尝试 git submodule
   try {
@@ -316,7 +301,10 @@ async function ensureSubmodule(): Promise<void> {
         windowsHide: true,
         timeout: 60000,
       });
-      if (fs.existsSync(marker)) return;
+      if (fs.existsSync(marker)) {
+        sendProgress('后端代码下载完成 ✓');
+        return;
+      }
     }
   } catch { /* git 不可用, 使用 curl 下载 */ }
 
@@ -328,6 +316,7 @@ async function ensureSubmodule(): Promise<void> {
       `curl -L -o "${zipPath}" "https://github.com/OpenWSGR/AutoWSGR/archive/refs/heads/main.zip"`,
       { windowsHide: true, timeout: 120000 },
     );
+    sendProgress('正在解压后端代码…');
     await execAsync(
       `powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${extractDir}' -Force"`,
       { windowsHide: true, timeout: 30000 },
@@ -339,11 +328,23 @@ async function ensureSubmodule(): Promise<void> {
     }
     try { fs.unlinkSync(zipPath); } catch { /* ignore */ }
     try { fs.rmSync(extractDir, { recursive: true }); } catch { /* ignore */ }
-  } catch { /* 下载失败, checkEnvironment 会报缺少 */ }
+    sendProgress('后端代码下载完成 ✓');
+  } catch {
+    sendProgress('WARNING 后端代码下载失败');
+  }
 }
 
-/** 查找可用的 Python 可执行文件 */
+/** 查找可用的 Python 可执行文件 (优先本地便携版) */
 async function findPython(): Promise<string | null> {
+  // 优先使用本地便携版 Python
+  const localPython = path.join(appRoot(), 'python', 'python.exe');
+  if (fs.existsSync(localPython)) {
+    try {
+      await execAsync(`"${localPython}" --version`, { windowsHide: true });
+      return localPython;
+    } catch { /* local Python broken */ }
+  }
+  // 回退到系统 Python
   for (const cmd of ['python', 'python3']) {
     try {
       await execAsync(`${cmd} --version`, { windowsHide: true });
@@ -351,6 +352,62 @@ async function findPython(): Promise<string | null> {
     } catch { /* continue */ }
   }
   return null;
+}
+
+/** 安装便携版 Python 到项目目录 */
+async function installPortablePython(): Promise<{ success: boolean }> {
+  const pythonDir = path.join(appRoot(), 'python');
+  const pythonExe = path.join(pythonDir, 'python.exe');
+  if (fs.existsSync(pythonExe)) return { success: true };
+
+  const version = '3.12.8';
+  const zipUrl = `https://www.python.org/ftp/python/${version}/python-${version}-embed-amd64.zip`;
+  const zipPath = path.join(app.getPath('temp'), 'python-embed.zip');
+
+  sendProgress(`正在下载 Python ${version} 便携版…`);
+  try {
+    await execAsync(`curl -L -o "${zipPath}" "${zipUrl}"`, { windowsHide: true, timeout: 180000 });
+  } catch {
+    sendProgress('ERROR Python 下载失败，请检查网络');
+    return { success: false };
+  }
+
+  sendProgress('正在解压 Python…');
+  try {
+    if (!fs.existsSync(pythonDir)) fs.mkdirSync(pythonDir, { recursive: true });
+    await execAsync(
+      `powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${pythonDir}' -Force"`,
+      { windowsHide: true, timeout: 30000 },
+    );
+  } catch {
+    sendProgress('ERROR Python 解压失败');
+    return { success: false };
+  }
+
+  // 启用 site-packages (pip 所需)
+  const pthFile = path.join(pythonDir, 'python312._pth');
+  if (fs.existsSync(pthFile)) {
+    let content = fs.readFileSync(pthFile, 'utf-8');
+    content = content.replace(/^#\s*import site/m, 'import site');
+    fs.writeFileSync(pthFile, content, 'utf-8');
+  }
+
+  // 安装 pip
+  sendProgress('正在安装 pip…');
+  const getPipPath = path.join(app.getPath('temp'), 'get-pip.py');
+  try {
+    await execAsync(`curl -sSL -o "${getPipPath}" "https://bootstrap.pypa.io/get-pip.py"`, { windowsHide: true, timeout: 60000 });
+    await execAsync(`"${pythonExe}" "${getPipPath}"`, { windowsHide: true, timeout: 120000 });
+  } catch {
+    sendProgress('ERROR pip 安装失败');
+    return { success: false };
+  }
+
+  try { fs.unlinkSync(zipPath); } catch { /* ignore */ }
+  try { fs.unlinkSync(getPipPath); } catch { /* ignore */ }
+
+  sendProgress(`Python ${version} 便携版安装完成 ✓`);
+  return { success: true };
 }
 
 interface EnvCheckResult {
@@ -362,29 +419,39 @@ interface EnvCheckResult {
 
 /** 检查 Python 环境和所需包 */
 async function checkEnvironment(): Promise<EnvCheckResult> {
+  sendProgress('正在检查 Python 环境…');
   const pythonCmd = await findPython();
   if (!pythonCmd) {
+    sendProgress('WARNING 未找到 Python');
     return { pythonCmd: null, pythonVersion: null, missingPackages: [], allReady: false };
   }
 
   let pythonVersion: string | null = null;
   try {
-    const { stdout } = await execAsync(`${pythonCmd} --version`, { windowsHide: true });
+    const { stdout } = await execAsync(`"${pythonCmd}" --version`, { windowsHide: true });
     pythonVersion = stdout.trim();
+    sendProgress(`${pythonVersion} ✓`);
   } catch { /* ignore */ }
 
+  sendProgress('正在检查依赖包…');
   const requiredPackages = ['uvicorn', 'fastapi', 'autowsgr.server.main'];
   const missingPackages: string[] = [];
   for (const pkg of requiredPackages) {
+    const displayName = pkg.split('.')[0];
     try {
-      await execAsync(`${pythonCmd} -c "import ${pkg}"`, { windowsHide: true });
+      await execAsync(`"${pythonCmd}" -c "import ${pkg}"`, { windowsHide: true });
+      sendProgress(`  ${displayName} ✓`);
     } catch {
-      // 显示顶层包名 (autowsgr.server.main → autowsgr)
-      missingPackages.push(pkg.split('.')[0]);
+      missingPackages.push(displayName);
+      sendProgress(`  ${displayName} ✗`);
     }
   }
   // 去重 (autowsgr 可能被多次加入)
   const unique = [...new Set(missingPackages)];
+
+  if (unique.length === 0) {
+    sendProgress('依赖检查通过 ✓');
+  }
 
   return {
     pythonCmd,

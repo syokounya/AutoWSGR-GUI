@@ -48,6 +48,10 @@ contextBridge.exposeInMainWorld('electronBridge', {
     return ipcRenderer.invoke('run-setup');
   },
 
+  installPortablePython: () => {
+    return ipcRenderer.invoke('install-portable-python');
+  },
+
   onBackendLog: (callback: (line: string) => void) => {
     ipcRenderer.on('backend-log', (_event, line: string) => callback(line));
   },

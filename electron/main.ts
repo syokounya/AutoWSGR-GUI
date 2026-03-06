@@ -290,7 +290,7 @@ ipcMain.handle('pull-updates', async () => {
 
 ipcMain.handle('start-backend', async () => {
   if (backendProcess) return { success: true, message: '后端已在运行' };
-  startBackend();
+  await startBackend();
   return { success: true, message: '后端启动中' };
 });
 

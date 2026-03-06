@@ -14,11 +14,6 @@ function isPackaged(): boolean {
   return app.isPackaged;
 }
 
-/** asar 内的项目根目录 (__dirname = dist/electron/ → 向上两级) */
-function asarRoot(): string {
-  return path.join(__dirname, '..', '..');
-}
-
 /**
  * 应用工作目录（外部可写文件：autowsgr/、usersettings.yaml 等）：
  * - 开发模式: 项目根目录
@@ -64,8 +59,53 @@ function createWindow(): BrowserWindow {
     backgroundColor: '#1a1a2e',
   });
 
-  // HTML 在 asar 内: src/view/index.html (开发和打包模式均通过 asarRoot 解析)
-  win.loadFile(path.join(asarRoot(), 'src', 'view', 'index.html'));
+  // 使用 app.getAppPath() 获取 asar/项目根目录，确保开发和打包模式都正确
+  const appDir = app.getAppPath();
+  const htmlPath = path.join(appDir, 'src', 'view', 'index.html');
+  console.log('[Main] appDir:', appDir);
+  console.log('[Main] htmlPath:', htmlPath);
+  console.log('[Main] __dirname:', __dirname);
+  console.log('[Main] isPackaged:', isPackaged());
+
+  // 打包模式下: 校验 HTML 文件是否存在，用对话框显示诊断信息
+  if (isPackaged()) {
+    const htmlExists = fs.existsSync(htmlPath);
+    if (!htmlExists) {
+      let debugInfo = `HTML not found!\nPath: ${htmlPath}\nappDir: ${appDir}`;
+      try {
+        const topFiles = fs.readdirSync(appDir);
+        debugInfo += `\n\nFiles in appDir:\n${topFiles.join(', ')}`;
+        const srcDir = path.join(appDir, 'src');
+        if (fs.existsSync(srcDir)) {
+          debugInfo += `\n\nsrc/: ${fs.readdirSync(srcDir).join(', ')}`;
+        }
+      } catch (e) {
+        debugInfo += `\nreaddir error: ${e}`;
+      }
+      dialog.showMessageBox({ type: 'error', title: 'Debug', message: debugInfo });
+    }
+  }
+
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    const msg = `Page load failed!\nCode: ${errorCode}\nDesc: ${errorDescription}\nURL: ${validatedURL}\nPath: ${htmlPath}`;
+    console.error('[Main]', msg);
+    if (isPackaged()) {
+      dialog.showMessageBox({ type: 'error', title: 'Load Error', message: msg });
+    }
+  });
+
+  win.loadFile(htmlPath).catch(err => {
+    console.error('[Main] loadFile failed:', err);
+    if (isPackaged()) {
+      dialog.showMessageBox({ type: 'error', title: 'loadFile Error', message: `${err.message}\nPath: ${htmlPath}` });
+    }
+  });
+
+  // 打包模式下临时打开 DevTools 以便调试
+  if (isPackaged()) {
+    win.webContents.openDevTools();
+  }
+
   mainWindow = win;
   win.on('closed', () => { mainWindow = null; });
   return win;

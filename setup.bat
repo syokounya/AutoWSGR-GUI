@@ -1,11 +1,5 @@
 @echo off
-chcp 65001 >nul 2>&1
 setlocal EnableDelayedExpansion
-
-:: ═══════════════════════════════════════════════════════
-:: AutoWSGR-GUI 环境安装脚本
-:: 自动安装 Python 3.12 并配置后端依赖
-:: ═══════════════════════════════════════════════════════
 
 set "SCRIPT_DIR=%~dp0"
 set "PYTHON_VERSION=3.12.8"
@@ -13,8 +7,6 @@ set "PYTHON_INSTALLER=python-%PYTHON_VERSION%-amd64.exe"
 set "BACKEND_REPO=OpenWSGR/AutoWSGR"
 set "BACKEND_BRANCH=main"
 
-:: 检测是否从打包后的 resources 目录运行
-:: 打包后结构: <安装目录>/resources/setup.bat, exe 在上级目录
 set "IS_PACKAGED=0"
 if exist "%SCRIPT_DIR%..\AutoWSGR-GUI.exe" (
     set "IS_PACKAGED=1"
@@ -26,14 +18,14 @@ if exist "%SCRIPT_DIR%..\AutoWSGR-GUI.exe" (
 set "TEMP_DIR=%APP_DIR%\_setup_tmp"
 
 echo.
-echo  AutoWSGR-GUI 环境安装
-echo  ────────────────────────────────────
+echo  === AutoWSGR-GUI Environment Setup ===
+echo  APP_DIR: %APP_DIR%
 echo.
 
 if not exist "%TEMP_DIR%" mkdir "%TEMP_DIR%"
 
-:: ────────────── 检测 Python ──────────────
-echo [1/3] 检测 Python 环境...
+:: --- Python ---
+echo [1/3] Checking Python...
 
 set "PYTHON_CMD="
 where python >nul 2>&1
@@ -42,90 +34,89 @@ if %errorlevel%==0 (
     for /f "tokens=1,2 delims=." %%a in ("!PY_VER!") do (
         if %%a GEQ 3 if %%b GEQ 12 (
             set "PYTHON_CMD=python"
-            echo       √ 已安装 Python !PY_VER!
+            echo       OK: Python !PY_VER!
         )
     )
 )
 
 if not defined PYTHON_CMD (
-    echo       未找到 Python 3.12+，开始下载安装...
+    echo       Python 3.12+ not found, downloading...
     set "PY_URL=https://www.python.org/ftp/python/%PYTHON_VERSION%/%PYTHON_INSTALLER%"
-    echo       下载 !PY_URL!
+    echo       URL: !PY_URL!
     curl -L -o "%TEMP_DIR%\%PYTHON_INSTALLER%" "!PY_URL!"
     if !errorlevel! neq 0 (
-        echo       × 下载 Python 失败，请检查网络连接
+        echo       FAILED: download Python failed
         goto :error
     )
-    echo       正在安装 Python %PYTHON_VERSION%（请在安装界面中勾选 Add to PATH）...
+    echo       Installing Python %PYTHON_VERSION% (please check Add to PATH)...
     "%TEMP_DIR%\%PYTHON_INSTALLER%" InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_launcher=1
     if !errorlevel! neq 0 (
-        echo       × Python 安装失败
+        echo       FAILED: Python install failed
         goto :error
     )
-    :: 刷新 PATH
     set "PATH=%LOCALAPPDATA%\Programs\Python\Python312\Scripts\;%LOCALAPPDATA%\Programs\Python\Python312\;!PATH!"
     for /f "tokens=*" %%i in ('where python 2^>nul') do set "PYTHON_CMD=%%i"
     if not defined PYTHON_CMD (
         set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
         if not exist "!PYTHON_CMD!" (
-            echo       × 安装后仍找不到 Python，请重启终端后重试
+            echo       FAILED: Python not found after install, please restart terminal
             goto :error
         )
     )
-    echo       √ Python %PYTHON_VERSION% 安装完成
+    echo       OK: Python %PYTHON_VERSION% installed
 )
 
-:: ────────────── 下载后端代码 ──────────────
-echo [2/3] 检测后端代码...
+:: --- Backend Code ---
+echo [2/3] Checking backend code...
 
 set "BACKEND_DIR=%APP_DIR%\autowsgr"
 if exist "%BACKEND_DIR%\pyproject.toml" (
-    echo       √ 后端代码已存在
+    echo       OK: backend code exists at %BACKEND_DIR%
 ) else (
-    echo       下载后端代码（%BACKEND_REPO% %BACKEND_BRANCH%）...
     set "BACKEND_ZIP_URL=https://github.com/%BACKEND_REPO%/archive/refs/heads/%BACKEND_BRANCH%.zip"
+    echo       Downloading from: !BACKEND_ZIP_URL!
     curl -L -o "%TEMP_DIR%\autowsgr.zip" "!BACKEND_ZIP_URL!"
     if !errorlevel! neq 0 (
-        echo       × 下载后端代码失败，请检查网络连接
+        echo       FAILED: download backend failed, check network
         goto :error
     )
-    echo       正在解压...
+    echo       Extracting...
     if exist "%BACKEND_DIR%" rmdir /s /q "%BACKEND_DIR%"
     powershell -NoProfile -Command "Expand-Archive -Path '%TEMP_DIR%\autowsgr.zip' -DestinationPath '%TEMP_DIR%\backend_extract' -Force"
     for /d %%d in ("%TEMP_DIR%\backend_extract\AutoWSGR-*") do (
         move "%%d" "%BACKEND_DIR%" >nul
     )
-    echo       √ 后端代码下载完成
+    echo       OK: backend code downloaded
 )
 
-:: ────────────── 安装后端依赖 ──────────────
-echo [3/3] 安装后端 Python 依赖...
+:: --- Python Dependencies ---
+echo [3/3] Installing Python dependencies...
 
 pushd "%APP_DIR%"
 "!PYTHON_CMD!" -m pip install --upgrade pip 2>nul
 "!PYTHON_CMD!" -m pip install -e "./autowsgr"
 if !errorlevel! neq 0 (
-    echo       × Python 依赖安装失败
+    echo       FAILED: pip install failed
     popd
     goto :error
 )
-echo       √ 后端依赖安装完成
+echo       OK: Python dependencies installed
 popd
 
-:: ────────────── 清理临时文件 ──────────────
+:: --- Cleanup ---
 echo.
-echo  正在清理临时文件...
+echo  Cleaning up temp files...
 if exist "%TEMP_DIR%" rmdir /s /q "%TEMP_DIR%"
 
 echo.
-echo  环境安装完成！运行 AutoWSGR-GUI.exe 即可启动。
+echo  Setup complete! Run AutoWSGR-GUI.exe to start.
 echo.
 pause
 exit /b 0
 
 :error
 echo.
-echo  × 安装过程中出现错误，请查看上方日志
+echo  ERROR: Setup failed, see log above.
 echo.
 pause
 exit /b 1

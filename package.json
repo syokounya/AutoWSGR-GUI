@@ -59,8 +59,7 @@
           "target": "portable",
           "arch": ["x64"]
         }
-      ],
-      "icon": "resource/icon.ico"
+      ]
     },
     "nsis": {
       "oneClick": false,

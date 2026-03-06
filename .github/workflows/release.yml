@@ -73,6 +73,7 @@ jobs:
           files: |
             release/*.exe
             release/*.zip
+            setup.bat
           body: |
             ## AutoWSGR-GUI v${{ github.event.inputs.version }}
 

@@ -292,9 +292,20 @@ async function findPython(): Promise<string | null> {
     } catch { /* local Python broken */ }
   }
   // 回退到系统全局 Python (依赖通过 PYTHONUSERBASE + --no-user 确保安装到项目目录)
+  // 注意: 必须解析出真实的 .exe 绝对路径，因为 pyenv 等工具使用 .bat shim，
+  // 而 Node.js spawn() 不经过 shell，无法执行 .bat 文件。
   for (const cmd of ['python', 'python3']) {
     try {
       await execAsync(`${cmd} --version`, { windowsHide: true });
+      // 通过 Python 自身获取真实可执行文件路径 (解决 pyenv/.bat shim 问题)
+      const { stdout } = await execAsync(
+        `${cmd} -c "import sys; print(sys.executable)"`,
+        { windowsHide: true },
+      );
+      const resolved = stdout.trim();
+      if (resolved && fs.existsSync(resolved)) {
+        return resolved;
+      }
       return cmd;
     } catch { /* continue */ }
   }
@@ -512,14 +523,18 @@ function localSitePackages(): string {
 function findPythonSync(): string | null {
   const localPython = path.join(appRoot(), 'python', 'python.exe');
   if (fs.existsSync(localPython)) return localPython;
-  try {
-    execSync('python --version', { windowsHide: true });
-    return 'python';
-  } catch { /* continue */ }
-  try {
-    execSync('python3 --version', { windowsHide: true });
-    return 'python3';
-  } catch { /* continue */ }
+  for (const cmd of ['python', 'python3']) {
+    try {
+      execSync(`${cmd} --version`, { windowsHide: true });
+      // 解析真实路径 (pyenv/.bat shim 兼容)
+      const resolved = execSync(
+        `${cmd} -c "import sys; print(sys.executable)"`,
+        { windowsHide: true, encoding: 'utf-8' },
+      ).trim();
+      if (resolved && fs.existsSync(resolved)) return resolved;
+      return cmd;
+    } catch { /* continue */ }
+  }
   return null;
 }
 

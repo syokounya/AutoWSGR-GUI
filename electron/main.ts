@@ -5,7 +5,10 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import { execSync, spawn, ChildProcess } from 'child_process';
+import { exec, execSync, spawn, ChildProcess } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -57,6 +60,7 @@ function createWindow(): BrowserWindow {
     },
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#1a1a2e',
+    icon: path.join(isPackaged() ? process.resourcesPath : path.join(__dirname, '..', '..'), 'resource', 'images', 'logo.png'),
   });
 
   // 使用 app.getAppPath() 获取 asar/项目根目录，确保开发和打包模式都正确
@@ -262,8 +266,8 @@ ipcMain.handle('get-app-root', () => {
 });
 
 ipcMain.handle('check-environment', async () => {
-  ensureSubmodule();
-  return checkEnvironment();
+  await ensureSubmodule();
+  return await checkEnvironment();
 });
 
 ipcMain.handle('check-updates', async () => {
@@ -271,7 +275,7 @@ ipcMain.handle('check-updates', async () => {
 });
 
 ipcMain.handle('install-deps', async () => {
-  const pythonCmd = findPython();
+  const pythonCmd = await findPython();
   if (!pythonCmd) return { success: false, output: '找不到 Python' };
   return installDependencies(pythonCmd);
 });
@@ -297,22 +301,20 @@ ipcMain.handle('start-backend', async () => {
 let backendProcess: ChildProcess | null = null;
 
 /** 确保后端代码已就绪 (git submodule 或 curl 下载) */
-function ensureSubmodule(): void {
+async function ensureSubmodule(): Promise<void> {
   const submodDir = path.join(appRoot(), 'autowsgr');
   const marker = path.join(submodDir, 'pyproject.toml');
   if (fs.existsSync(marker)) return;
 
   // 先尝试 git submodule
   try {
-    execSync('git --version', { encoding: 'utf-8', windowsHide: true });
+    await execAsync('git --version', { windowsHide: true });
     const gitDir = path.join(appRoot(), '.git');
     if (fs.existsSync(gitDir)) {
-      execSync('git submodule update --init', {
+      await execAsync('git submodule update --init', {
         cwd: appRoot(),
-        encoding: 'utf-8',
         windowsHide: true,
         timeout: 60000,
-        stdio: ['pipe', 'pipe', 'pipe'],
       });
       if (fs.existsSync(marker)) return;
     }
@@ -322,13 +324,13 @@ function ensureSubmodule(): void {
   try {
     const zipPath = path.join(app.getPath('temp'), 'autowsgr.zip');
     const extractDir = path.join(app.getPath('temp'), 'autowsgr_extract');
-    execSync(
+    await execAsync(
       `curl -L -o "${zipPath}" "https://github.com/OpenWSGR/AutoWSGR/archive/refs/heads/main.zip"`,
-      { encoding: 'utf-8', windowsHide: true, timeout: 120000 },
+      { windowsHide: true, timeout: 120000 },
     );
-    execSync(
+    await execAsync(
       `powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${extractDir}' -Force"`,
-      { encoding: 'utf-8', windowsHide: true, timeout: 30000 },
+      { windowsHide: true, timeout: 30000 },
     );
     const entries = fs.readdirSync(extractDir);
     const autoDir = entries.find(e => e.startsWith('AutoWSGR-'));
@@ -341,10 +343,10 @@ function ensureSubmodule(): void {
 }
 
 /** 查找可用的 Python 可执行文件 */
-function findPython(): string | null {
+async function findPython(): Promise<string | null> {
   for (const cmd of ['python', 'python3']) {
     try {
-      execSync(`${cmd} --version`, { encoding: 'utf-8', windowsHide: true });
+      await execAsync(`${cmd} --version`, { windowsHide: true });
       return cmd;
     } catch { /* continue */ }
   }
@@ -359,22 +361,23 @@ interface EnvCheckResult {
 }
 
 /** 检查 Python 环境和所需包 */
-function checkEnvironment(): EnvCheckResult {
-  const pythonCmd = findPython();
+async function checkEnvironment(): Promise<EnvCheckResult> {
+  const pythonCmd = await findPython();
   if (!pythonCmd) {
     return { pythonCmd: null, pythonVersion: null, missingPackages: [], allReady: false };
   }
 
   let pythonVersion: string | null = null;
   try {
-    pythonVersion = execSync(`${pythonCmd} --version`, { encoding: 'utf-8', windowsHide: true }).trim();
+    const { stdout } = await execAsync(`${pythonCmd} --version`, { windowsHide: true });
+    pythonVersion = stdout.trim();
   } catch { /* ignore */ }
 
   const requiredPackages = ['uvicorn', 'fastapi', 'autowsgr.server.main'];
   const missingPackages: string[] = [];
   for (const pkg of requiredPackages) {
     try {
-      execSync(`${pythonCmd} -c "import ${pkg}"`, { encoding: 'utf-8', windowsHide: true });
+      await execAsync(`${pythonCmd} -c "import ${pkg}"`, { windowsHide: true });
     } catch {
       // 显示顶层包名 (autowsgr.server.main → autowsgr)
       missingPackages.push(pkg.split('.')[0]);
@@ -514,8 +517,8 @@ function runSetupScript(): Promise<{ success: boolean; output: string }> {
   });
 }
 
-function startBackend(): void {
-  const pythonCmd = findPython();
+async function startBackend(): Promise<void> {
+  const pythonCmd = await findPython();
   if (!pythonCmd) {
     console.error('[Backend] 找不到 Python');
     return;

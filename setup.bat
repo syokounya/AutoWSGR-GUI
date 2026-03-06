@@ -48,7 +48,7 @@ if not defined PYTHON_CMD (
         echo       FAILED: download Python failed
         goto :error
     )
-    echo       Installing Python %PYTHON_VERSION% (please check Add to PATH)...
+    echo       Installing Python %PYTHON_VERSION%, please check Add to PATH...
     "%TEMP_DIR%\%PYTHON_INSTALLER%" InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_launcher=1
     if !errorlevel! neq 0 (
         echo       FAILED: Python install failed

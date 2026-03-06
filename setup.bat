@@ -87,23 +87,17 @@ echo       OK: Python %PYTHON_VERSION% portable installed
 :: --- Python Dependencies ---
 echo [2/2] Installing Python dependencies...
 
-:: Keep all deps local via PYTHONUSERBASE
-set "PYTHONUSERBASE=%APP_DIR%\python"
+:: Install to project local directory, never touch global
+set "TARGET_DIR=%APP_DIR%\python\site-packages"
+if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
 
-:: Determine pip install mode: local Python uses --no-user, system Python uses --user
-set "PIP_SCOPE=--no-user"
-echo "!PYTHON_EXE!" | findstr /I /C:"%APP_DIR%" >nul 2>&1
-if !errorlevel! neq 0 (
-    set "PIP_SCOPE=--user"
-)
-
-"!PYTHON_EXE!" -m pip install !PIP_SCOPE! --upgrade pip 2>nul
-"!PYTHON_EXE!" -m pip install !PIP_SCOPE! autowsgr
+"!PYTHON_EXE!" -m pip install --upgrade pip 2>nul
+"!PYTHON_EXE!" -m pip install --target "%TARGET_DIR%" --upgrade autowsgr
 if !errorlevel! neq 0 (
     echo       FAILED: pip install autowsgr failed
     goto :error
 )
-echo       OK: autowsgr installed
+echo       OK: autowsgr installed to project directory
 
 :: --- Cleanup ---
 echo.

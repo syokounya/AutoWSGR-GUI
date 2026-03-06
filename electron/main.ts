@@ -381,20 +381,48 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
   } catch { /* ignore */ }
 
   sendProgress('正在检查依赖包…');
-  const requiredPackages = ['uvicorn', 'fastapi', 'autowsgr'];
+  // uvicorn/fastapi 用 pip show 检测存在性
+  const simplePackages = ['uvicorn', 'fastapi'];
   const missingPackages: string[] = [];
-  for (const pkg of requiredPackages) {
+  for (const pkg of simplePackages) {
     try {
-      // 用 pip show 检测安装状态，避免 import 时触发子模块加载失败
       await execAsync(`"${pythonCmd}" -m pip show ${pkg}`, {
         windowsHide: true,
         env: pipEnv(),
       });
-      sendProgress(`  ${pkg} ✓`);
+      sendProgress(`  ${pkg} \u2713`);
     } catch {
       missingPackages.push(pkg);
-      sendProgress(`  ${pkg} ✗`);
+      sendProgress(`  ${pkg} \u2717`);
     }
+  }
+  // autowsgr 需要检查版本 >= 2.0.3
+  let autowsgrOk = false;
+  try {
+    const { stdout } = await execAsync(
+      `"${pythonCmd}" -c "from importlib.metadata import version; print(version('autowsgr'))"`,
+      { windowsHide: true, env: pipEnv() },
+    );
+    const ver = stdout.trim();
+    // 简单版本比较: 拆分数字比较
+    const parts = ver.replace(/[^0-9.]/g, '.').split('.').map(Number);
+    const minParts = [2, 0, 3];
+    let ok = false;
+    for (let i = 0; i < 3; i++) {
+      if ((parts[i] || 0) > (minParts[i] || 0)) { ok = true; break; }
+      if ((parts[i] || 0) < (minParts[i] || 0)) { ok = false; break; }
+      if (i === 2) ok = true; // equal
+    }
+    autowsgrOk = ok;
+    if (ok) {
+      sendProgress(`  autowsgr ${ver} \u2713`);
+    } else {
+      sendProgress(`  autowsgr ${ver} < 2.0.3 \u2717`);
+      missingPackages.push('autowsgr');
+    }
+  } catch {
+    missingPackages.push('autowsgr');
+    sendProgress(`  autowsgr \u2717`);
   }
   // 去重 (autowsgr 可能被多次加入)
   const unique = [...new Set(missingPackages)];
@@ -462,12 +490,22 @@ function isLocalPython(pythonCmd: string): boolean {
   return path.isAbsolute(pythonCmd) && pythonCmd.startsWith(appRoot());
 }
 
-/** pip 命令的公共环境变量 */
+/** pip 命令的公共环境变量：确保项目目录的包优先于全局 */
 function pipEnv(): NodeJS.ProcessEnv {
+  const localSite = localSitePackages();
+  const existing = process.env.PYTHONPATH || '';
   return {
     ...process.env,
     PYTHONUSERBASE: path.join(appRoot(), 'python'),
+    PYTHONPATH: existing
+      ? `${localSite}${path.delimiter}${existing}`
+      : localSite,
   };
+}
+
+/** 项目本地包目录 */
+function localSitePackages(): string {
+  return path.join(appRoot(), 'python', 'site-packages');
 }
 
 /** 同步查找 Python (用于非 async 上下文) */
@@ -485,29 +523,19 @@ function findPythonSync(): string | null {
   return null;
 }
 
-/** 自动安装依赖 (pip install autowsgr)，依赖保存在项目目录 */
+/** 自动安装依赖 (pip install autowsgr)，始终安装到项目目录，不动全局 */
 function installDependencies(pythonCmd: string): Promise<{ success: boolean; output: string }> {
-  return new Promise(async (resolve) => {
+  return new Promise((resolve) => {
     const cwd = appRoot();
-    const useLocal = isLocalPython(pythonCmd);
-    sendProgress('正在安装后端依赖…');
-
-    // 先卸载可能存在的旧版/可编辑安装，确保从 PyPI 干净安装
-    try {
-      await execAsync(`"${pythonCmd}" -m pip uninstall -y autowsgr`, {
-        cwd, windowsHide: true, env: pipEnv(),
-      });
-      sendProgress('已清除旧版 autowsgr');
-    } catch { /* 未安装时忽略 */ }
-
-    const pipArgs = ['-m', 'pip', 'install'];
-    if (useLocal) {
-      pipArgs.push('--no-user');
-    } else {
-      pipArgs.push('--user');
-    }
-    pipArgs.push('autowsgr');
-    const proc = spawn(pythonCmd, pipArgs, {
+    const targetDir = localSitePackages();
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    sendProgress('正在安装后端依赖到项目目录…');
+    const proc = spawn(pythonCmd, [
+      '-m', 'pip', 'install',
+      '--target', targetDir,
+      '--upgrade',
+      'autowsgr',
+    ], {
       cwd,
       windowsHide: true,
       stdio: 'pipe',
@@ -528,7 +556,7 @@ function installDependencies(pythonCmd: string): Promise<{ success: boolean; out
   });
 }
 
-/** 更新 autowsgr 包 (pip install --upgrade) */
+/** 更新 autowsgr 包 (pip install --upgrade --target) */
 function pullUpdates(): Promise<{ success: boolean; output: string }> {
   return new Promise((resolve) => {
     const pythonCmd = findPythonSync();
@@ -536,11 +564,14 @@ function pullUpdates(): Promise<{ success: boolean; output: string }> {
       resolve({ success: false, output: '找不到 Python' });
       return;
     }
-    const useLocal = isLocalPython(pythonCmd);
-    const pipArgs = ['-m', 'pip', 'install', '--upgrade'];
-    pipArgs.push(useLocal ? '--no-user' : '--user');
-    pipArgs.push('autowsgr');
-    const proc = spawn(pythonCmd, pipArgs, {
+    const targetDir = localSitePackages();
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    const proc = spawn(pythonCmd, [
+      '-m', 'pip', 'install',
+      '--target', targetDir,
+      '--upgrade',
+      'autowsgr',
+    ], {
       cwd: appRoot(),
       windowsHide: true,
       stdio: 'pipe',
@@ -605,8 +636,8 @@ async function startBackend(): Promise<void> {
   }
 
   const cwd = appRoot();
-  // 全局 Python 时需通过 PYTHONPATH 找到 user-site 包
-  const userSiteDir = path.join(cwd, 'python');
+  // PYTHONPATH 确保项目目录的包优先于全局
+  const localSite = localSitePackages();
   const existingPyPath = process.env.PYTHONPATH || '';
   backendProcess = spawn(pythonCmd, [
     '-X', 'utf8',
@@ -622,10 +653,10 @@ async function startBackend(): Promise<void> {
       ...process.env,
       PYTHONUTF8: '1',
       PYTHONIOENCODING: 'utf-8',
-      PYTHONUSERBASE: userSiteDir,
+      PYTHONUSERBASE: path.join(cwd, 'python'),
       PYTHONPATH: existingPyPath
-        ? `${existingPyPath}${path.delimiter}${userSiteDir}`
-        : userSiteDir,
+        ? `${localSite}${path.delimiter}${existingPyPath}`
+        : localSite,
     },
   });
 

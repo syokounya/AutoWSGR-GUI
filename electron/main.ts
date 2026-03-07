@@ -427,7 +427,7 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
 
   sendProgress('正在检查依赖包…');
   const prefix = sysPathInsert();
-  const simplePackages = ['uvicorn', 'fastapi', 'setuptools'];
+  const simplePackages = ['uvicorn', 'fastapi'];
   const missingPackages: string[] = [];
   for (const pkg of simplePackages) {
     try {
@@ -687,15 +687,24 @@ async function startBackend(): Promise<void> {
   }
 
   const cwd = appRoot();
-  // PYTHONPATH 确保项目目录的包优先于全局
   const localSite = localSitePackages();
-  const existingPyPath = process.env.PYTHONPATH || '';
+
+  // 使用 -c 启动而非 -m uvicorn，以便：
+  // 1. 显式注入 site-packages 到 sys.path
+  // 2. 激活 setuptools 的 distutils 兼容层 (Python 3.12+ 需要)
+  // 3. 绕过嵌入式 Python 的 ._pth/PYTHONPATH 限制
+  const bootstrap = [
+    `import sys, os, site`,
+    `sp = r'${localSite.replace(/'/g, "\\'")}'`,
+    `sys.path.insert(0, sp)`,
+    `site.addsitedir(sp)`,  // 处理 .pth 文件，激活 _distutils_hack
+    `import uvicorn`,
+    `uvicorn.run('autowsgr.server.main:app', host='127.0.0.1', port=8000)`,
+  ].join('; ');
+
   backendProcess = spawn(pythonCmd, [
     '-X', 'utf8',
-    '-m', 'uvicorn',
-    'autowsgr.server.main:app',
-    '--host', '127.0.0.1',
-    '--port', '8000',
+    '-c', bootstrap,
   ], {
     cwd,
     windowsHide: true,
@@ -704,10 +713,6 @@ async function startBackend(): Promise<void> {
       ...process.env,
       PYTHONUTF8: '1',
       PYTHONIOENCODING: 'utf-8',
-      PYTHONUSERBASE: path.join(cwd, 'python'),
-      PYTHONPATH: existingPyPath
-        ? `${localSite}${path.delimiter}${existingPyPath}`
-        : localSite,
     },
   });
 

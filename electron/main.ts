@@ -310,6 +310,9 @@ ipcMain.handle('start-backend', async () => {
 
 let backendProcess: ChildProcess | null = null;
 
+/** 缓存的 Python 路径 (undefined = 尚未查找) */
+let cachedPythonCmd: string | null | undefined;
+
 /** 向渲染进程发送环境检查进度 */
 function sendProgress(msg: string): void {
   mainWindow?.webContents.send('backend-log', msg);
@@ -326,41 +329,48 @@ function isAllowedPythonVersion(versionOutput: string): boolean {
   return major === 3 && (minor === 12 || minor === 13);
 }
 
-/** 查找可用的 Python 可执行文件 (优先本地便携版, 仅接受 3.12/3.13) */
+/** 查找可用的 Python 可执行文件 (优先本地便携版, 仅接受 3.12/3.13, 结果会缓存) */
 async function findPython(): Promise<string | null> {
+  if (cachedPythonCmd !== undefined) return cachedPythonCmd;
+
+  let found: string | null = null;
   // 优先使用本地便携版 Python
   const localPython = path.join(appRoot(), 'python', 'python.exe');
   if (fs.existsSync(localPython)) {
     try {
       const { stdout } = await execAsync(`"${localPython}" --version`, { windowsHide: true });
-      if (isAllowedPythonVersion(stdout)) return localPython;
-      sendProgress(`WARNING 本地 Python 版本不兼容: ${stdout.trim()}（需要 3.12 或 3.13）`);
+      if (isAllowedPythonVersion(stdout)) found = localPython;
+      else sendProgress(`WARNING 本地 Python 版本不兼容: ${stdout.trim()}（需要 3.12 或 3.13）`);
     } catch { /* local Python broken */ }
   }
-  // 回退到系统全局 Python (依赖通过 PYTHONUSERBASE + --no-user 确保安装到项目目录)
-  // 注意: 必须解析出真实的 .exe 绝对路径，因为 pyenv 等工具使用 .bat shim，
-  // 而 Node.js spawn() 不经过 shell，无法执行 .bat 文件。
-  for (const cmd of ['python', 'python3']) {
-    try {
-      const { stdout: verOut } = await execAsync(`${cmd} --version`, { windowsHide: true });
-      if (!isAllowedPythonVersion(verOut)) continue;
-      // 通过 Python 自身获取真实可执行文件路径 (解决 pyenv/.bat shim 问题)
-      const { stdout } = await execAsync(
-        `${cmd} -c "import sys; print(sys.executable)"`,
-        { windowsHide: true },
-      );
-      const resolved = stdout.trim();
-      if (resolved && fs.existsSync(resolved)) {
-        return resolved;
-      }
-      return cmd;
-    } catch { /* continue */ }
+
+  if (!found) {
+    // 回退到系统全局 Python
+    // 注意: 必须解析出真实的 .exe 绝对路径，因为 pyenv 等工具使用 .bat shim，
+    // 而 Node.js spawn() 不经过 shell，无法执行 .bat 文件。
+    for (const cmd of ['python', 'python3']) {
+      try {
+        const { stdout: verOut } = await execAsync(`${cmd} --version`, { windowsHide: true });
+        if (!isAllowedPythonVersion(verOut)) continue;
+        // 通过 Python 自身获取真实可执行文件路径 (解决 pyenv/.bat shim 问题)
+        const { stdout } = await execAsync(
+          `${cmd} -c "import sys; print(sys.executable)"`,
+          { windowsHide: true },
+        );
+        const resolved = stdout.trim();
+        found = (resolved && fs.existsSync(resolved)) ? resolved : cmd;
+        break;
+      } catch { /* continue */ }
+    }
   }
-  return null;
+
+  cachedPythonCmd = found;
+  return found;
 }
 
 /** 安装/初始化便携版 Python（已随应用打包，仅需确保 pip 就绪） */
 async function installPortablePython(): Promise<{ success: boolean }> {
+  cachedPythonCmd = undefined; // 安装后需重新检测
   const pythonDir = path.join(appRoot(), 'python');
   const pythonExe = path.join(pythonDir, 'python.exe');
 
@@ -527,60 +537,79 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
   } catch { /* ignore */ }
 
   sendProgress('正在检查依赖包…');
-  const prefix = sysPathInsert();
-  const simplePackages = ['uvicorn', 'fastapi'];
   const missingPackages: string[] = [];
-  for (const pkg of simplePackages) {
-    try {
-      await execAsync(`"${pythonCmd}" -c "${prefix}import ${pkg}"`, {
-        windowsHide: true,
-      });
-      sendProgress(`  ${pkg} \u2713`);
-    } catch {
-      missingPackages.push(pkg);
-      sendProgress(`  ${pkg} \u2717`);
-    }
-  }
-  // autowsgr 需要检查版本 >= 2.0.4
-  let autowsgrOk = false;
+
+  // 批量检查所有依赖（单次 Python 调用，避免多次子进程启动开销）
+  const spFwd = localSitePackages().replace(/\\/g, '/');
+  const checkScript = path.join(app.getPath('temp'), 'autowsgr_depcheck.py');
+  fs.writeFileSync(checkScript, [
+    'import json, sys',
+    `sys.path.insert(0, '${spFwd}')`,
+    'r = {}',
+    "for p in ['uvicorn', 'fastapi']:",
+    '    try:',
+    '        __import__(p); r[p] = True',
+    '    except ImportError:',
+    '        r[p] = False',
+    'try:',
+    '    import autowsgr; r["autowsgr"] = autowsgr.__version__',
+    'except ImportError:',
+    '    r["autowsgr"] = None',
+    'print(json.dumps(r))',
+  ].join('\n'), 'utf-8');
+
   try {
-    const { stdout } = await execAsync(
-      `"${pythonCmd}" -c "${prefix}import autowsgr; print(autowsgr.__version__)"`,
-      { windowsHide: true },
+    const { stdout: depOut } = await execAsync(
+      `"${pythonCmd}" "${checkScript}"`,
+      { windowsHide: true, timeout: 30000 },
     );
-    const ver = stdout.trim();
-    // 简单版本比较: 拆分数字比较
-    const parts = ver.replace(/[^0-9.]/g, '.').split('.').map(Number);
-    const minParts = [2, 0, 4];
-    let ok = false;
-    for (let i = 0; i < 3; i++) {
-      if ((parts[i] || 0) > (minParts[i] || 0)) { ok = true; break; }
-      if ((parts[i] || 0) < (minParts[i] || 0)) { ok = false; break; }
-      if (i === 2) ok = true; // equal
+    try { fs.unlinkSync(checkScript); } catch { /* ignore */ }
+    const depResult = JSON.parse(depOut.trim());
+
+    for (const pkg of ['uvicorn', 'fastapi']) {
+      if (depResult[pkg]) {
+        sendProgress(`  ${pkg} \u2713`);
+      } else {
+        missingPackages.push(pkg);
+        sendProgress(`  ${pkg} \u2717`);
+      }
     }
-    autowsgrOk = ok;
-    if (ok) {
-      sendProgress(`  autowsgr ${ver} \u2713`);
+
+    if (depResult.autowsgr != null) {
+      const ver = String(depResult.autowsgr);
+      const parts = ver.replace(/[^0-9.]/g, '.').split('.').map(Number);
+      const minParts = [2, 0, 4];
+      let ok = false;
+      for (let i = 0; i < 3; i++) {
+        if ((parts[i] || 0) > (minParts[i] || 0)) { ok = true; break; }
+        if ((parts[i] || 0) < (minParts[i] || 0)) { ok = false; break; }
+        if (i === 2) ok = true;
+      }
+      if (ok) {
+        sendProgress(`  autowsgr ${ver} \u2713`);
+      } else {
+        sendProgress(`  autowsgr ${ver} < 2.0.4 \u2717`);
+        missingPackages.push('autowsgr');
+      }
     } else {
-      sendProgress(`  autowsgr ${ver} < 2.0.4 \u2717`);
       missingPackages.push('autowsgr');
+      sendProgress(`  autowsgr \u2717`);
     }
   } catch {
-    missingPackages.push('autowsgr');
-    sendProgress(`  autowsgr \u2717`);
+    try { fs.unlinkSync(checkScript); } catch { /* ignore */ }
+    missingPackages.push('uvicorn', 'fastapi', 'autowsgr');
+    sendProgress('  依赖检查失败');
   }
-  // 去重 (autowsgr 可能被多次加入)
-  const unique = [...new Set(missingPackages)];
 
-  if (unique.length === 0) {
+  if (missingPackages.length === 0) {
     sendProgress('依赖检查通过 ✓');
   }
 
   return {
     pythonCmd,
     pythonVersion,
-    missingPackages: unique,
-    allReady: unique.length === 0,
+    missingPackages,
+    allReady: missingPackages.length === 0,
   };
 }
 
@@ -655,6 +684,7 @@ function localSitePackages(): string {
 
 /** 同步查找 Python (用于非 async 上下文) */
 function findPythonSync(): string | null {
+  if (cachedPythonCmd !== undefined) return cachedPythonCmd;
   const localPython = path.join(appRoot(), 'python', 'python.exe');
   if (fs.existsSync(localPython)) return localPython;
   for (const cmd of ['python', 'python3']) {

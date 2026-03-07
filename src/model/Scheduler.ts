@@ -152,6 +152,9 @@ export class Scheduler {
 
     this.api.connectWebSockets();
 
+    // 模拟器就绪，立即更新为空闲状态
+    this.setStatus('idle');
+
     // 系统启动后立即检查远征，确保远征页面不会阻碍后续任务
     this.emitLog('info', '正在检查远征...');
     try {
@@ -160,8 +163,6 @@ export class Scheduler {
     } catch {
       this.emitLog('debug', '远征检查跳过');
     }
-
-    this.setStatus('idle');
     this.startExpeditionTimer();
     return true;
   }
@@ -244,6 +245,16 @@ export class Scheduler {
   /** 清空队列 (不影响当前正在运行的) */
   clearQueue(): void {
     this.queue = [];
+    this.notifyQueueChange();
+  }
+
+  /** 移动队列中的任务顺序 */
+  moveTask(fromIndex: number, toIndex: number): void {
+    if (fromIndex < 0 || fromIndex >= this.queue.length) return;
+    if (toIndex < 0 || toIndex >= this.queue.length) return;
+    if (fromIndex === toIndex) return;
+    const [task] = this.queue.splice(fromIndex, 1);
+    this.queue.splice(toIndex, 0, task);
     this.notifyQueueChange();
   }
 

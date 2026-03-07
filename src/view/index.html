@@ -26,40 +26,59 @@
       <div class="main-layout">
         <!-- 左侧：状态 & 任务 -->
         <div class="main-left">
-          <div class="status-card">
-            <div class="status-indicator" id="status-dot"></div>
-            <span id="status-text">未连接</span>
-          </div>
-
-          <div class="card" id="current-task-card" style="display:none">
-            <h3>当前任务</h3>
-            <div class="task-info">
-              <span class="task-name" id="task-name"></span>
-              <span class="task-progress" id="task-progress"></span>
+          <div class="status-row">
+            <div class="status-card">
+              <div class="status-indicator" id="status-dot"></div>
+              <span id="status-text">未连接</span>
             </div>
-            <button class="btn btn-danger btn-small" id="btn-stop-task">停止任务</button>
-          </div>
-
-          <div class="card" id="idle-card">
-            <p class="idle-text">当前无运行任务</p>
-            <div class="idle-actions">
-              <button class="btn btn-primary" id="btn-import-plan">导入战斗方案 (.yaml)</button>
+            <div class="expedition-bar">
+              <span>远征检查倒计时：</span>
+              <span id="expedition-timer">--:--</span>
             </div>
           </div>
 
-          <div class="card" id="task-queue-card" style="display:none">
-            <h3>任务队列</h3>
-            <div class="task-queue-list" id="task-queue-list"></div>
-            <div class="queue-actions">
-              <button class="btn btn-primary btn-small" id="btn-start-queue">开始执行</button>
-              <button class="btn btn-small" id="btn-clear-queue">清空队列</button>
+          <!-- 统一任务区域：空闲 / 队列 / 运行 合并 -->
+          <div class="card" id="task-area-card">
+            <div id="task-area-idle">
+              <p class="idle-text">当前无运行任务</p>
+              <div class="idle-actions">
+                <button class="btn btn-primary" id="btn-import-plan">导入战斗方案 (.yaml)</button>
+              </div>
+            </div>
+            <div id="task-area-queue" style="display:none">
+              <div class="task-area-header">
+                <h3>任务队列</h3>
+                <div class="queue-actions">
+                  <button class="btn btn-primary btn-small" id="btn-start-queue">开始执行</button>
+                  <button class="btn btn-small" id="btn-clear-queue">清空队列</button>
+                  <button class="btn btn-danger btn-small" id="btn-stop-task" style="display:none">停止</button>
+                </div>
+              </div>
+              <div class="task-queue-list" id="task-queue-list"></div>
             </div>
           </div>
 
-          <div class="expedition-bar">
-            <span>远征检查倒计时：</span>
-            <span id="expedition-timer">--:--</span>
+          <!-- 任务组 -->
+          <div class="card task-group-card" id="task-group-card">
+            <div class="task-group-header">
+              <h3>任务列表</h3>
+              <div class="task-group-selector">
+                <select class="input input-sm" id="task-group-select"></select>
+                <button class="btn btn-small" id="btn-tg-new" title="新建组">＋</button>
+                <button class="btn btn-small btn-danger" id="btn-tg-delete" title="删除组">🗑</button>
+              </div>
+            </div>
+            <div class="task-group-items" id="task-group-items">
+              <p class="tg-empty">暂无任务条目，导入方案后点击「加入任务组」添加</p>
+            </div>
+            <div class="task-group-actions">
+              <button class="btn btn-primary btn-small" id="btn-tg-load-all">全部加入队列</button>
+              <button class="btn btn-small" id="btn-tg-add-file">从文件添加</button>
+              <button class="btn btn-small" id="btn-tg-rename" title="重命名">✎</button>
+            </div>
           </div>
+
+
         </div>
 
         <!-- 右侧：日志 -->
@@ -166,7 +185,11 @@
             <div id="node-info" class="card node-info" style="display:none"></div>
             <div id="node-editor" class="card node-editor" style="display:none">
               <div class="node-editor-header">
-                <h3>节点 <span id="node-editor-id"></span></h3>
+                <div class="node-info-badge"></div>
+                <div class="node-editor-title">
+                  <h3>节点 <span id="node-editor-id"></span></h3>
+                  <span class="node-editor-type"></span>
+                </div>
                 <button class="btn btn-small" id="btn-node-editor-close">✕</button>
               </div>
               <div class="form-group">
@@ -179,11 +202,9 @@
                   <option value="5">单横阵</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label><input type="checkbox" id="node-edit-night"> 夜战</label>
-              </div>
-              <div class="form-group">
+              <div class="form-group form-row">
                 <label><input type="checkbox" id="node-edit-proceed" checked> 前进</label>
+                <label><input type="checkbox" id="node-edit-night"> 夜战</label>
               </div>
               <div class="form-group">
                 <label>索敌规则</label>
@@ -196,6 +217,7 @@
 
           <div class="plan-actions">
             <button class="btn btn-primary btn-small" id="btn-execute-plan">加入队列</button>
+            <button class="btn btn-small" id="btn-add-to-group">加入任务组</button>
             <button class="btn btn-small" id="btn-export-plan">导出 YAML</button>
             <label>
               次数：<input type="number" id="plan-times" value="1" min="1" max="99" class="input-small">
@@ -331,6 +353,19 @@
     </section>
 
   </main>
+
+  <!-- 通用输入对话框 -->
+  <div id="generic-prompt" class="modal-overlay" style="display:none">
+    <div class="modal card">
+      <h3 id="generic-prompt-title">提示</h3>
+      <p id="generic-prompt-message" style="margin:0 0 12px;font-size:13px;color:var(--text-secondary)"></p>
+      <input id="generic-prompt-input" class="input" style="display:none" />
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="generic-prompt-ok">确定</button>
+        <button class="btn" id="generic-prompt-cancel">取消</button>
+      </div>
+    </div>
+  </div>
 
   <script src="../../dist/renderer.bundle.js"></script>
 </body>

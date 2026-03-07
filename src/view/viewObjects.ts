@@ -18,6 +18,8 @@ export interface MainViewObject {
   expeditionTimer: string;       // 如 "12:34" 下次远征检查倒计时
   taskQueue: TaskQueueItemVO[];
   wsConnected: boolean;
+  /** 当前正在运行的任务 ID（与 taskQueue 中的 id 对应） */
+  runningTaskId: string | null;
 }
 
 /** 正在执行的任务 */
@@ -34,6 +36,10 @@ export interface TaskQueueItemVO {
   name: string;
   priorityLabel: string;         // "远征" | "用户" | "日常"
   remaining: number;
+  /** 进度文本，如 "2/5"，仅当前运行的任务有值 */
+  progress?: string;
+  /** 进度百分比 0~1，用于进度条 */
+  progressPercent?: number;
 }
 
 /** 日志条目 */
@@ -61,6 +67,7 @@ export interface NodeViewObject {
   note: string;                   // 简要备注
   nodeType: MapNodeType;          // 地图数据中的节点类型
   detour: boolean;                // 是否为迂回点
+  mapNight: boolean;              // 地图数据中标记为夜战点
   position?: [number, number];    // 地图上的坐标 (已缩放)
 }
 

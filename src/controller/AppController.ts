@@ -7,6 +7,7 @@
 import { MainView } from '../view/MainView';
 import { PlanPreviewView } from '../view/PlanPreviewView';
 import { ConfigView } from '../view/ConfigView';
+import { TaskGroupView } from '../view/TaskGroupView';
 import type {
   MainViewObject,
   PlanPreviewViewObject,
@@ -26,6 +27,7 @@ import {
   type SchedulerStatus,
 } from '../model/Scheduler';
 import { CronScheduler } from '../model/CronScheduler';
+import { TaskGroupModel } from '../model/TaskGroupModel';
 import type { NormalFightReq, TaskRequest } from '../model/ApiClient';
 import {
   FORMATION_NAMES,
@@ -34,7 +36,7 @@ import {
   type TaskPreset,
   type EnemyRule,
 } from '../model/types';
-import { loadMapData, loadExMapData, getNodeType, isDetourNode } from '../model/MapDataLoader';
+import { loadMapData, loadExMapData, getNodeType, isDetourNode, isNightNode } from '../model/MapDataLoader';
 
 /** 将 repair_mode（数字或数组）转换为显示文本 */
 function resolveRepairModeLabel(mode: number | number[]): string {
@@ -109,8 +111,10 @@ export class AppController {
   private mainView: MainView;
   private planView: PlanPreviewView;
   private configView: ConfigView;
+  private taskGroupView: TaskGroupView;
 
   private configModel: ConfigModel;
+  private taskGroupModel: TaskGroupModel;
   private currentPlan: PlanModel | null = null;
   private currentMapData: MapData | null = null;
 
@@ -130,7 +134,9 @@ export class AppController {
     this.mainView = new MainView();
     this.planView = new PlanPreviewView();
     this.configView = new ConfigView();
+    this.taskGroupView = new TaskGroupView();
     this.configModel = new ConfigModel();
+    this.taskGroupModel = new TaskGroupModel();
 
     this.api = new ApiClient();
     this.scheduler = new Scheduler(this.api);
@@ -152,6 +158,7 @@ export class AppController {
     this.bindActions();
     this.bindSchedulerCallbacks();
     this.bindCronCallbacks();
+    this.bindTaskGroupActions();
     this.renderMain();
     this.planView.render(null);
 
@@ -163,6 +170,7 @@ export class AppController {
     // 窗口关闭时保存定时调度器状态 (用于下次启动时检测错过的刷新)
     window.addEventListener('beforeunload', () => {
       this.cronScheduler.saveState();
+      this.taskGroupModel.save();
     });
 
     // 加载配置 → 自动检测模拟器 → 渲染 → 连接
@@ -190,6 +198,10 @@ export class AppController {
     // 显示关键路径，帮助用户找到配置和方案目录
     this.appendLocalLog('info', `配置文件目录: ${this.configDir}`);
     this.appendLocalLog('info', `方案文件目录: ${this.plansDir}`);
+
+    // 加载任务组
+    await this.taskGroupModel.load();
+    this.renderTaskGroup();
 
     // 更新方案空状态页的路径提示
     this.updatePlanEmptyHint();
@@ -502,6 +514,12 @@ export class AppController {
       this.renderMain();
     };
 
+    // View 的队列拖拽排序回调
+    this.mainView.onMoveQueueItem = (from, to) => {
+      this.scheduler.moveTask(from, to);
+      this.renderMain();
+    };
+
     // 节点编辑：点击节点 chip → 打开编辑或信息面板
     this.planView.onNodeClick = (nodeId) => {
       if (!this.currentPlan) return;
@@ -521,12 +539,13 @@ export class AppController {
       const rulesText = (args.enemy_rules ?? [])
         .map(r => `${r[0]}, ${r[1]}`)
         .join('\n');
-      this.planView.showNodeEditor(nodeId, {
+      const mapNight = this.currentMapData ? isNightNode(this.currentMapData, nodeId) : false;
+      this.planView.showNodeEditor(nodeId, nodeType as any, {
         formation: args.formation ?? 2,
         night: args.night ?? false,
         proceed: args.proceed ?? true,
         enemyRules: rulesText,
-      });
+      }, mapNight);
     };
 
     // 节点编辑：关闭
@@ -586,6 +605,205 @@ export class AppController {
       else if (field === 'fight_condition') this.currentPlan.data.fight_condition = value;
       else if (field === 'fleet_id') this.currentPlan.data.fleet_id = value;
     };
+  }
+
+  // ════════════════════════════════════════
+  // 任务组
+  // ════════════════════════════════════════
+
+  private bindTaskGroupActions(): void {
+    this.taskGroupView.onSelectGroup = (name) => {
+      this.taskGroupModel.setActiveGroup(name);
+      this.renderTaskGroup();
+    };
+
+    this.taskGroupView.onNewGroup = async () => {
+      const name = await this.showPrompt('新建任务列表', '请输入名称：');
+      if (!name?.trim()) return;
+      const trimmed = name.trim();
+      const existing = this.taskGroupModel.getGroup(trimmed);
+      if (existing) {
+        await this.showAlert('提示', `任务列表「${trimmed}」已存在，请换一个名称或直接选择它。`);
+        return;
+      }
+      this.taskGroupModel.upsertGroup(trimmed);
+      this.taskGroupModel.setActiveGroup(trimmed);
+      this.taskGroupModel.save();
+      this.renderTaskGroup();
+    };
+
+    this.taskGroupView.onDeleteGroup = async () => {
+      const active = this.taskGroupModel.getActiveGroup();
+      if (!active) return;
+      const yes = await this.showConfirm('删除确认', `确认删除任务列表「${active.name}」？`);
+      if (!yes) return;
+      this.taskGroupModel.deleteGroup(active.name);
+      this.taskGroupModel.save();
+      this.renderTaskGroup();
+    };
+
+    this.taskGroupView.onRenameGroup = async () => {
+      const active = this.taskGroupModel.getActiveGroup();
+      if (!active) return;
+      const newName = await this.showPrompt('重命名', '新名称：', active.name);
+      if (!newName?.trim() || newName.trim() === active.name) return;
+      const trimmed = newName.trim();
+      if (!this.taskGroupModel.renameGroup(active.name, trimmed)) {
+        await this.showAlert('提示', `名称「${trimmed}」已被占用。`);
+        return;
+      }
+      this.taskGroupModel.save();
+      this.renderTaskGroup();
+    };
+
+    this.taskGroupView.onRemoveItem = (index) => {
+      const active = this.taskGroupModel.getActiveGroup();
+      if (!active) return;
+      this.taskGroupModel.removeItem(active.name, index);
+      this.taskGroupModel.save();
+      this.renderTaskGroup();
+    };
+
+    this.taskGroupView.onTimesChange = (index, times) => {
+      const active = this.taskGroupModel.getActiveGroup();
+      if (!active) return;
+      this.taskGroupModel.updateItemTimes(active.name, index, times);
+      this.taskGroupModel.save();
+    };
+
+    this.taskGroupView.onMoveItem = (from, to) => {
+      const active = this.taskGroupModel.getActiveGroup();
+      if (!active) return;
+      this.taskGroupModel.moveItem(active.name, from, to);
+      this.taskGroupModel.save();
+      this.renderTaskGroup();
+    };
+
+    this.taskGroupView.onLoadAll = () => this.loadGroupToQueue();
+
+    this.taskGroupView.onAddFile = () => this.addFileToGroup();
+
+    // 方案预览页「加入任务组」按钮
+    document.getElementById('btn-add-to-group')?.addEventListener('click', () => this.addCurrentPlanToGroup());
+  }
+
+  private renderTaskGroup(): void {
+    const groups = this.taskGroupModel.groups;
+    const active = this.taskGroupModel.getActiveGroup();
+    this.taskGroupView.render({
+      groups: groups.map(g => ({ name: g.name, itemCount: g.items.length })),
+      activeGroupName: this.taskGroupModel.activeGroupName,
+      items: active?.items ?? [],
+    });
+  }
+
+  /** 将当前方案页预览的方案加入活跃任务组 */
+  private addCurrentPlanToGroup(): void {
+    if (!this.currentPlan) {
+      this.appendLocalLog('warn', '没有已加载的方案');
+      return;
+    }
+    let group = this.taskGroupModel.getActiveGroup();
+    if (!group) {
+      // 自动创建默认组
+      this.taskGroupModel.upsertGroup('默认');
+      this.taskGroupModel.setActiveGroup('默认');
+      group = this.taskGroupModel.getActiveGroup()!;
+    }
+    const timesInput = document.getElementById('plan-times') as HTMLInputElement;
+    const times = Math.max(1, parseInt(timesInput.value, 10) || 1);
+    const fileName = this.currentPlan.fileName;
+    const label = fileName.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? fileName;
+
+    this.taskGroupModel.addItem(group.name, {
+      path: fileName,
+      kind: 'plan',
+      times,
+      label,
+    });
+    this.taskGroupModel.save();
+    this.renderTaskGroup();
+    this.appendLocalLog('info', `已将「${label} ×${times}」加入任务组「${group.name}」`);
+  }
+
+  /** 从文件对话框添加条目到当前组 */
+  private async addFileToGroup(): Promise<void> {
+    const bridge = window.electronBridge;
+    if (!bridge) return;
+    let group = this.taskGroupModel.getActiveGroup();
+    if (!group) {
+      this.taskGroupModel.upsertGroup('默认');
+      this.taskGroupModel.setActiveGroup('默认');
+      group = this.taskGroupModel.getActiveGroup()!;
+    }
+
+    const result = await bridge.openFileDialog([
+      { name: 'YAML 方案/预设', extensions: ['yaml', 'yml'] },
+    ], this.plansDir || undefined);
+    if (!result) return;
+
+    // 判断类型
+    const parsed = (await import('js-yaml')).load(result.content) as Record<string, unknown>;
+    let itemKind: 'plan' | 'preset' = 'plan';
+    if (parsed && typeof parsed === 'object') {
+      if ('task_type' in parsed && !('chapter' in parsed)) itemKind = 'preset';
+    }
+
+    const label = result.path.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? result.path;
+    this.taskGroupModel.addItem(group.name, {
+      path: result.path,
+      kind: itemKind,
+      times: (parsed as any)?.times ?? 1,
+      label,
+    });
+    this.taskGroupModel.save();
+    this.renderTaskGroup();
+    this.appendLocalLog('info', `已添加「${label}」到任务组「${group.name}」`);
+  }
+
+  /** 将当前任务组全部条目加入调度队列 */
+  private async loadGroupToQueue(): Promise<void> {
+    const group = this.taskGroupModel.getActiveGroup();
+    if (!group || group.items.length === 0) {
+      this.appendLocalLog('warn', '当前任务组为空');
+      return;
+    }
+    const bridge = window.electronBridge;
+    if (!bridge) return;
+
+    let loadedCount = 0;
+    for (const item of group.items) {
+      try {
+        const content = await bridge.readFile(item.path);
+        const parsed = (await import('js-yaml')).load(content) as Record<string, unknown>;
+        if (!parsed || typeof parsed !== 'object') continue;
+
+        if (item.kind === 'preset' || ('task_type' in parsed && !('chapter' in parsed))) {
+          this.importTaskPreset(parsed as unknown as TaskPreset, item.path);
+        } else {
+          // 战斗方案
+          const plan = PlanModel.fromYaml(content, item.path);
+          const times = item.times;
+          const req: NormalFightReq = {
+            type: 'normal_fight',
+            plan_id: plan.fileName,
+            times: 1,
+            gap: plan.data.gap ?? 0,
+          };
+          this.scheduler.addTask(plan.mapName, 'normal_fight', req, TaskPriority.USER_TASK, times, plan.data.stop_condition);
+        }
+        loadedCount++;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.appendLocalLog('error', `加载「${item.label}」失败: ${msg}`);
+      }
+    }
+
+    if (loadedCount > 0) {
+      this.appendLocalLog('info', `已从任务组「${group.name}」加载 ${loadedCount} 个任务到队列`);
+      this.switchPage('main');
+      this.renderMain();
+    }
   }
 
   // ════════════════════════════════════════
@@ -880,12 +1098,38 @@ export class AppController {
     const running = this.scheduler.currentRunningTask;
     const queue = this.scheduler.taskQueue;
 
-    const taskQueueVo: TaskQueueItemVO[] = queue.map((t: SchedulerTask) => ({
-      id: t.id,
-      name: t.name,
-      priorityLabel: PRIORITY_LABELS[t.priority] ?? '用户',
-      remaining: t.remainingTimes,
-    }));
+    // 构建统一的任务队列 VO：运行中的任务在最前
+    const taskQueueVo: TaskQueueItemVO[] = [];
+
+    if (running) {
+      // 解析进度
+      let progressPercent = 0;
+      if (this.currentProgress) {
+        const parts = this.currentProgress.split('/');
+        if (parts.length === 2) {
+          const cur = parseInt(parts[0], 10);
+          const total = parseInt(parts[1], 10);
+          if (total > 0) progressPercent = cur / total;
+        }
+      }
+      taskQueueVo.push({
+        id: running.id,
+        name: running.name,
+        priorityLabel: PRIORITY_LABELS[running.priority] ?? '用户',
+        remaining: running.remainingTimes,
+        progress: this.currentProgress || undefined,
+        progressPercent,
+      });
+    }
+
+    for (const t of queue) {
+      taskQueueVo.push({
+        id: t.id,
+        name: t.name,
+        priorityLabel: PRIORITY_LABELS[t.priority] ?? '用户',
+        remaining: t.remainingTimes,
+      });
+    }
 
     const vo: MainViewObject = {
       status: this.scheduler.status === 'not_connected' ? 'not_connected' : this.scheduler.status,
@@ -901,6 +1145,7 @@ export class AppController {
       expeditionTimer: this.expeditionTimerText,
       taskQueue: taskQueueVo,
       wsConnected: this.wsConnected,
+      runningTaskId: running?.id ?? null,
     };
     this.mainView.render(vo);
   }
@@ -944,6 +1189,105 @@ export class AppController {
   /** 隐藏新建方案对话框 */
   private hideNewPlanDialog(): void {
     document.getElementById('new-plan-dialog')!.style.display = 'none';
+  }
+
+  // ══════════════════════════════════════
+  // 通用对话框（替代 prompt / confirm / alert）
+  // ══════════════════════════════════════
+
+  /** 弹出输入框，返回用户输入的字符串，取消返回 null */
+  private showPrompt(title: string, message = '', defaultValue = ''): Promise<string | null> {
+    const overlay = document.getElementById('generic-prompt')!;
+    const titleEl = document.getElementById('generic-prompt-title')!;
+    const msgEl = document.getElementById('generic-prompt-message')!;
+    const inputEl = document.getElementById('generic-prompt-input') as HTMLInputElement;
+    const okBtn = document.getElementById('generic-prompt-ok')!;
+    const cancelBtn = document.getElementById('generic-prompt-cancel')!;
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    msgEl.style.display = message ? '' : 'none';
+    inputEl.style.display = '';
+    inputEl.value = defaultValue;
+    cancelBtn.style.display = '';
+    overlay.style.display = '';
+    inputEl.focus();
+    inputEl.select();
+
+    return new Promise<string | null>((resolve) => {
+      const cleanup = () => {
+        overlay.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        inputEl.removeEventListener('keydown', onKey);
+      };
+      const onOk = () => { cleanup(); resolve(inputEl.value); };
+      const onCancel = () => { cleanup(); resolve(null); };
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Enter') onOk();
+        if (e.key === 'Escape') onCancel();
+      };
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      inputEl.addEventListener('keydown', onKey);
+    });
+  }
+
+  /** 弹出确认框，返回 true/false */
+  private showConfirm(title: string, message = ''): Promise<boolean> {
+    const overlay = document.getElementById('generic-prompt')!;
+    const titleEl = document.getElementById('generic-prompt-title')!;
+    const msgEl = document.getElementById('generic-prompt-message')!;
+    const inputEl = document.getElementById('generic-prompt-input') as HTMLInputElement;
+    const okBtn = document.getElementById('generic-prompt-ok')!;
+    const cancelBtn = document.getElementById('generic-prompt-cancel')!;
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    msgEl.style.display = message ? '' : 'none';
+    inputEl.style.display = 'none';
+    cancelBtn.style.display = '';
+    overlay.style.display = '';
+    okBtn.focus();
+
+    return new Promise<boolean>((resolve) => {
+      const cleanup = () => {
+        overlay.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+      };
+      const onOk = () => { cleanup(); resolve(true); };
+      const onCancel = () => { cleanup(); resolve(false); };
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+    });
+  }
+
+  /** 弹出提示框（只有确定按钮） */
+  private showAlert(title: string, message = ''): Promise<void> {
+    const overlay = document.getElementById('generic-prompt')!;
+    const titleEl = document.getElementById('generic-prompt-title')!;
+    const msgEl = document.getElementById('generic-prompt-message')!;
+    const inputEl = document.getElementById('generic-prompt-input') as HTMLInputElement;
+    const okBtn = document.getElementById('generic-prompt-ok')!;
+    const cancelBtn = document.getElementById('generic-prompt-cancel')!;
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    msgEl.style.display = message ? '' : 'none';
+    inputEl.style.display = 'none';
+    cancelBtn.style.display = 'none';
+    overlay.style.display = '';
+    okBtn.focus();
+
+    return new Promise<void>((resolve) => {
+      const cleanup = () => {
+        overlay.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+      };
+      const onOk = () => { cleanup(); resolve(); };
+      okBtn.addEventListener('click', onOk);
+    });
   }
 
   /** 确认新建方案 */
@@ -1008,6 +1352,7 @@ export class AppController {
         note: '',
         nodeType: mapData ? getNodeType(mapData, nodeId) : 'Normal',
         detour: mapData ? isDetourNode(mapData, nodeId) : false,
+        mapNight: mapData ? isNightNode(mapData, nodeId) : false,
       };
     });
 
@@ -1058,6 +1403,7 @@ export class AppController {
             note: '',
             nodeType: pt.type,
             detour: pt.detour,
+            mapNight: pt.night,
             position: scaledPos.get(id),
           };
         });

@@ -1,0 +1,22 @@
+{
+  "activeGroup": "1234",
+  "groups": [
+    {
+      "name": "1234",
+      "items": [
+        {
+          "path": "E:\\wsgrgui\\plans\\7-4千伪.yaml",
+          "kind": "plan",
+          "times": 1,
+          "label": "7-4千伪"
+        },
+        {
+          "path": "E:\\wsgrgui\\plans\\9-2捞胖次.yaml",
+          "kind": "plan",
+          "times": 9999,
+          "label": "9-2捞胖次"
+        }
+      ]
+    }
+  ]
+}

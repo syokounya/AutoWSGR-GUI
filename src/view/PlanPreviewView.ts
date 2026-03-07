@@ -12,10 +12,13 @@ const FORMATION_SHORT: Record<string, string> = {
   '单横阵': '单横',
 };
 
+/** 夜战点专用图标 */
+const NODE_TYPE_ICON_NIGHT = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M7 1a7 7 0 1 0 5.5 11.3A5.5 5.5 0 0 1 7 1z"/></svg>';
+
 /** 节点类型 → SVG 图标 (16×16 viewBox) */
 const NODE_TYPE_ICON: Record<MapNodeType, string> = {
   Start: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M6 2l8 6-8 6V2z"/></svg>',
-  Normal: '',
+  Normal: '<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
   Boss: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 13h12v1.5H2V13z"/><path d="M2 6l2.5 5h7L14 6l-3 3-3-4-3 4-3-3z"/><circle cx="2" cy="5.5" r="1"/><circle cx="8" cy="4.5" r="1"/><circle cx="14" cy="5.5" r="1"/></svg>',
   Resource: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 4h12v9H2V4zm1 1v7h10V5H3zm1 1h3v2H4V6zm5 0h3v2H9V6z"/></svg>',
   Penalty: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5l6.5 13H1.5L8 1.5zM7 6v4h2V6H7zm0 5v2h2v-2H7z"/></svg>',
@@ -31,7 +34,7 @@ const NODE_TYPE_NAME: Record<MapNodeType, string> = {
   Boss: 'Boss 点',
   Resource: '资源点',
   Penalty: '罚点',
-  Suppress: '航空制压',
+  Suppress: '压制点',
   Aerial: '空袭点',
   Hard: '精英点',
 };
@@ -181,7 +184,8 @@ export class PlanPreviewView {
   private createMapNode(node: NodeViewObject, isSelected: boolean): HTMLElement {
     const chip = document.createElement('div');
     const typeCls = `node-type-${node.nodeType.toLowerCase()}`;
-    chip.className = `map-node ${typeCls}${isSelected ? ' map-node-selected' : ''}${node.detour ? ' is-detour' : ''}`;
+    const nightCls = (node.mapNight && node.nodeType === 'Normal') ? ' is-night' : '';
+    chip.className = `map-node ${typeCls}${isSelected ? ' map-node-selected' : ''}${node.detour ? ' is-detour' : ''}${nightCls}`;
     if (node.position) {
       chip.style.left = node.position[0] + '%';
       chip.style.top = node.position[1] + '%';
@@ -231,11 +235,34 @@ export class PlanPreviewView {
   }
 
   /** 显示节点编辑面板并填充数据 */
-  showNodeEditor(nodeId: string, args: { formation: number; night: boolean; proceed: boolean; enemyRules: string }): void {
+  showNodeEditor(nodeId: string, nodeType: MapNodeType, args: { formation: number; night: boolean; proceed: boolean; enemyRules: string }, mapNight = false): void {
     this.nodeInfoEl.style.display = 'none';
+
+    // 更新 header: 图标 + 节点名 + 类型标签
+    const isNightBattle = mapNight && nodeType === 'Normal';
+    const icon = isNightBattle ? NODE_TYPE_ICON_NIGHT : (NODE_TYPE_ICON[nodeType] || '');
+    const typeName = isNightBattle ? '夜战点' : NODE_TYPE_NAME[nodeType];
+    const typeCls = isNightBattle ? 'node-type-night' : `node-type-${nodeType.toLowerCase()}`;
+    const headerEl = this.nodeEditorEl.querySelector('.node-editor-header')!;
+    const badgeEl = headerEl.querySelector('.node-info-badge');
+    const typeSpan = headerEl.querySelector('.node-editor-type');
+    if (badgeEl) {
+      badgeEl.className = `node-info-badge ${typeCls}`;
+      badgeEl.innerHTML = icon;
+    }
+    if (typeSpan) {
+      typeSpan.textContent = typeName;
+    }
     this.nodeEditorIdEl.textContent = nodeId;
     (document.getElementById('node-edit-formation') as HTMLSelectElement).value = String(args.formation);
-    (document.getElementById('node-edit-night') as HTMLInputElement).checked = args.night;
+    const nightCheckbox = document.getElementById('node-edit-night') as HTMLInputElement;
+    if (mapNight && nodeType === 'Normal') {
+      nightCheckbox.checked = true;
+      nightCheckbox.disabled = true;
+    } else {
+      nightCheckbox.checked = args.night;
+      nightCheckbox.disabled = false;
+    }
     (document.getElementById('node-edit-proceed') as HTMLInputElement).checked = args.proceed;
     (document.getElementById('node-edit-rules') as HTMLTextAreaElement).value = args.enemyRules;
     this.nodeEditorPlaceholderEl.style.display = 'none';

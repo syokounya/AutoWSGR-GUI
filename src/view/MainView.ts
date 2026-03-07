@@ -7,27 +7,22 @@ import type { MainViewObject, LogEntryVO } from './viewObjects';
 export class MainView {
   private statusDot: HTMLElement;
   private statusText: HTMLElement;
-  private taskCard: HTMLElement;
-  private taskName: HTMLElement;
-  private taskProgress: HTMLElement;
-  private idleCard: HTMLElement;
   private expeditionTimer: HTMLElement;
-  private taskQueueCard: HTMLElement;
+  private taskAreaIdle: HTMLElement;
+  private taskAreaQueue: HTMLElement;
   private taskQueueList: HTMLElement;
   private logContainer: HTMLElement;
 
   /** Controller 设置的回调 */
   onRemoveQueueItem?: (taskId: string) => void;
+  onMoveQueueItem?: (fromIndex: number, toIndex: number) => void;
 
   constructor() {
     this.statusDot = document.getElementById('status-dot')!;
     this.statusText = document.getElementById('status-text')!;
-    this.taskCard = document.getElementById('current-task-card')!;
-    this.taskName = document.getElementById('task-name')!;
-    this.taskProgress = document.getElementById('task-progress')!;
-    this.idleCard = document.getElementById('idle-card')!;
     this.expeditionTimer = document.getElementById('expedition-timer')!;
-    this.taskQueueCard = document.getElementById('task-queue-card')!;
+    this.taskAreaIdle = document.getElementById('task-area-idle')!;
+    this.taskAreaQueue = document.getElementById('task-area-queue')!;
     this.taskQueueList = document.getElementById('task-queue-list')!;
     this.logContainer = document.getElementById('log-container')!;
   }
@@ -38,43 +33,116 @@ export class MainView {
     this.statusDot.className = `status-indicator ${vo.status}`;
     this.statusText.textContent = vo.statusText;
 
-    // 任务卡片
-    if (vo.currentTask) {
-      this.taskCard.style.display = '';
-      this.idleCard.style.display = 'none';
-      this.taskName.textContent = `${vo.currentTask.name} (${vo.currentTask.type})`;
-      this.taskProgress.textContent = vo.currentTask.progress;
-    } else {
-      this.taskCard.style.display = 'none';
-      this.idleCard.style.display = '';
-    }
-
     // 远征倒计时
     this.expeditionTimer.textContent = vo.expeditionTimer;
 
-    // 任务队列
-    if (vo.taskQueue.length > 0) {
-      this.taskQueueCard.style.display = '';
+    const hasQueue = vo.taskQueue.length > 0;
+
+    if (hasQueue) {
+      // 有任务：显示队列视图
+      this.taskAreaIdle.style.display = 'none';
+      this.taskAreaQueue.style.display = '';
+
       this.taskQueueList.innerHTML = '';
-      for (const item of vo.taskQueue) {
+      const hasRunning = vo.runningTaskId != null;
+      for (let i = 0; i < vo.taskQueue.length; i++) {
+        const item = vo.taskQueue[i];
+        const isRunning = item.id === vo.runningTaskId;
+        // queueIndex: index within scheduler queue (excludes running task)
+        const queueIndex = hasRunning ? i - 1 : i;
         const div = document.createElement('div');
-        div.className = 'task-queue-item';
-        div.innerHTML =
-          `<span class="tq-name">${this.esc(item.name)} ×${item.remaining}</span>` +
-          `<span class="tq-priority">${this.esc(item.priorityLabel)}</span>` +
-          `<button class="tq-remove" title="移除">✕</button>`;
-        div.querySelector('.tq-remove')!.addEventListener('click', () => {
-          this.onRemoveQueueItem?.(item.id);
-        });
+        div.className = 'task-queue-item' + (isRunning ? ' tq-running' : '');
+        div.dataset['queueIndex'] = String(queueIndex);
+
+        // 拖拽排序（非运行中的任务）
+        if (!isRunning) {
+          div.draggable = true;
+          div.addEventListener('dragstart', (e) => {
+            div.classList.add('tq-dragging');
+            e.dataTransfer!.effectAllowed = 'move';
+            e.dataTransfer!.setData('text/plain', String(queueIndex));
+          });
+          div.addEventListener('dragend', () => {
+            div.classList.remove('tq-dragging');
+            this.taskQueueList.querySelectorAll('.tq-drag-over').forEach(el => el.classList.remove('tq-drag-over'));
+          });
+          div.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer!.dropEffect = 'move';
+            this.taskQueueList.querySelectorAll('.tq-drag-over').forEach(el => el.classList.remove('tq-drag-over'));
+            div.classList.add('tq-drag-over');
+          });
+          div.addEventListener('dragleave', () => div.classList.remove('tq-drag-over'));
+          div.addEventListener('drop', (e) => {
+            e.preventDefault();
+            div.classList.remove('tq-drag-over');
+            const from = parseInt(e.dataTransfer!.getData('text/plain'), 10);
+            const to = parseInt(div.dataset['queueIndex']!, 10);
+            if (!isNaN(from) && !isNaN(to) && from !== to) {
+              this.onMoveQueueItem?.(from, to);
+            }
+          });
+        }
+
+        // 拖拽手柄
+        if (!isRunning) {
+          const handle = document.createElement('span');
+          handle.className = 'tq-drag-handle';
+          handle.textContent = '⠿';
+          div.appendChild(handle);
+        }
+
+        // 进度条背景（仅正在运行的任务）
+        if (isRunning && item.progressPercent != null && item.progressPercent > 0) {
+          const pct = Math.min(1, Math.max(0, item.progressPercent)) * 100;
+          div.style.background = `linear-gradient(90deg, var(--accent-subtle) ${pct}%, transparent ${pct}%)`;
+        }
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'tq-name';
+        nameSpan.textContent = `${item.name} ×${item.remaining}`;
+        div.appendChild(nameSpan);
+
+        // 进度文本（仅正在运行的任务）
+        if (isRunning && item.progress) {
+          const progSpan = document.createElement('span');
+          progSpan.className = 'tq-progress';
+          progSpan.textContent = item.progress;
+          div.appendChild(progSpan);
+        }
+
+        const prioSpan = document.createElement('span');
+        prioSpan.className = 'tq-priority';
+        prioSpan.textContent = item.priorityLabel;
+        div.appendChild(prioSpan);
+
+        // 非运行中的任务可以移除
+        if (!isRunning) {
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'tq-remove';
+          removeBtn.title = '移除';
+          removeBtn.textContent = '✕';
+          removeBtn.addEventListener('click', () => {
+            this.onRemoveQueueItem?.(item.id);
+          });
+          div.appendChild(removeBtn);
+        }
+
         this.taskQueueList.appendChild(div);
       }
-      // 仅在空闲且有队列时显示「开始执行」按钮
+
+      // 按钮状态
       const startBtn = document.getElementById('btn-start-queue');
-      if (startBtn) {
-        startBtn.style.display = (vo.status === 'idle' || vo.status === 'not_connected') ? '' : 'none';
-      }
+      const stopBtn = document.getElementById('btn-stop-task');
+      const clearBtn = document.getElementById('btn-clear-queue');
+      const isRunningOrStopping = vo.status === 'running' || vo.status === 'stopping';
+      if (startBtn) startBtn.style.display = isRunningOrStopping ? 'none' : '';
+      if (stopBtn) stopBtn.style.display = isRunningOrStopping ? '' : 'none';
+      if (clearBtn) clearBtn.style.display = isRunningOrStopping ? 'none' : '';
     } else {
-      this.taskQueueCard.style.display = 'none';
+      // 无任务：显示空闲
+      this.taskAreaIdle.style.display = '';
+      this.taskAreaQueue.style.display = 'none';
     }
   }
 

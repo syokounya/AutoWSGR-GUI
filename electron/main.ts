@@ -343,10 +343,16 @@ async function installPortablePython(): Promise<{ success: boolean }> {
   }
 
   // 启用 site-packages (pip 所需)
+  // 嵌入式 Python 的 ._pth 文件存在时会忽略 PYTHONPATH 环境变量，
+  // 因此必须将 site-packages 路径直接写入 ._pth 文件
   const pthFile = path.join(pythonDir, 'python312._pth');
   if (fs.existsSync(pthFile)) {
     let content = fs.readFileSync(pthFile, 'utf-8');
     content = content.replace(/^#\s*import site/m, 'import site');
+    // 添加本地 site-packages 目录 (相对于 python.exe 所在目录)
+    if (!content.includes('site-packages')) {
+      content = content.trimEnd() + '\nsite-packages\n';
+    }
     fs.writeFileSync(pthFile, content, 'utf-8');
   }
 

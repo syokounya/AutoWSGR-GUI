@@ -4,8 +4,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronBridge', {
-  openFileDialog: (filters: { name: string; extensions: string[] }[]) => {
-    return ipcRenderer.invoke('open-file-dialog', filters);
+  openDirectoryDialog: (title?: string) => {
+    return ipcRenderer.invoke('open-directory-dialog', title);
+  },
+
+  openFileDialog: (filters: { name: string; extensions: string[] }[], defaultDir?: string) => {
+    return ipcRenderer.invoke('open-file-dialog', filters, defaultDir);
   },
 
   saveFile: (filePath: string, content: string) => {
@@ -26,6 +30,18 @@ contextBridge.exposeInMainWorld('electronBridge', {
 
   getAppRoot: () => {
     return ipcRenderer.invoke('get-app-root');
+  },
+
+  getPlansDir: () => {
+    return ipcRenderer.invoke('get-plans-dir');
+  },
+
+  getConfigDir: () => {
+    return ipcRenderer.invoke('get-config-dir');
+  },
+
+  openFolder: (folderPath: string) => {
+    return ipcRenderer.invoke('open-folder', folderPath);
   },
 
   checkEnvironment: () => {

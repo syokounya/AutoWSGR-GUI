@@ -99,6 +99,7 @@ export interface ConfigViewObject {
   emulatorSerial: string;
   gameApp: string;
   autoExpedition: boolean;
+  expeditionInterval: number;
   autoBattle: boolean;
   battleType: string;
   autoExercise: boolean;

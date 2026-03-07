@@ -56,6 +56,7 @@ export interface AccountConfig {
 
 export interface DailyAutomation {
   auto_expedition: boolean;
+  expedition_interval: number; // 远征检查间隔（分钟）
   auto_battle: boolean;
   battle_type: string;
   battle_times: number;

@@ -80,6 +80,8 @@
           <button class="btn btn-primary" id="btn-import-plan-2">选择 yaml 文件</button>
           <button class="btn" id="btn-new-plan">新建方案</button>
         </div>
+        <p class="plans-dir-hint">内置方案目录：<span id="plans-dir-hint" class="hint-path">加载中…</span></p>
+        <button class="btn btn-small btn-link" id="btn-open-plans-dir">打开方案文件夹</button>
       </div>
 
       <!-- 新建方案：选择地图对话框 -->
@@ -213,7 +215,10 @@
     <section id="page-config" class="page">
       <div class="config-header">
         <h2 class="config-page-title">配置</h2>
-        <button class="btn btn-primary" id="btn-save-config">保存配置</button>
+        <div class="config-header-actions">
+          <button class="btn btn-small btn-link" id="btn-open-config-dir">打开配置目录</button>
+          <button class="btn btn-primary" id="btn-save-config">保存配置</button>
+        </div>
       </div>
       <div class="config-grid">
       <div class="card">
@@ -255,6 +260,10 @@
         <h3>日常自动化</h3>
         <div class="form-group">
           <label><input type="checkbox" id="cfg-auto-expedition" checked> 自动远征</label>
+        </div>
+        <div class="form-group">
+          <label>远征检查间隔（分钟）</label>
+          <input type="number" id="cfg-expedition-interval" class="input" min="1" max="120" value="15">
         </div>
 
         <hr class="card-divider">

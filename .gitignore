@@ -31,5 +31,7 @@ release/
 
 # 安装临时文件
 _setup_tmp/
+.tmp/
 node/
 python/
+redist/

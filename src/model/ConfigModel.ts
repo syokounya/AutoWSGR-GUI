@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   },
   daily_automation: {
     auto_expedition: true,
+    expedition_interval: 15,
     auto_battle: false,
     battle_type: '困难潜艇',
     battle_times: 3,
@@ -49,6 +50,11 @@ export class ConfigModel {
     }
     if (parsed.daily_automation && typeof parsed.daily_automation === 'object') {
       Object.assign(base.daily_automation, parsed.daily_automation);
+      // 确保 expedition_interval 在合理范围
+      const ei = base.daily_automation.expedition_interval;
+      if (typeof ei !== 'number' || ei < 1 || ei > 120) {
+        base.daily_automation.expedition_interval = 15;
+      }
     }
 
     this.settings = base;

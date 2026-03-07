@@ -2,7 +2,7 @@
  * Electron 主进程。
  * 负责创建窗口、注册 IPC handler。
  */
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { exec, execSync, spawn, ChildProcess } from 'child_process';
@@ -90,9 +90,19 @@ function createWindow(): BrowserWindow {
 // IPC Handlers
 // ════════════════════════════════════════
 
-ipcMain.handle('open-file-dialog', async (_event, filters: Electron.FileFilter[]) => {
+ipcMain.handle('open-directory-dialog', async (_event, title?: string) => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: title || '选择文件夹',
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('open-file-dialog', async (_event, filters: Electron.FileFilter[], defaultDir?: string) => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
+    defaultPath: defaultDir || undefined,
     filters,
   });
 
@@ -107,12 +117,14 @@ ipcMain.handle('open-file-dialog', async (_event, filters: Electron.FileFilter[]
 
 ipcMain.handle('save-file', async (_event, filePath: string, content: string) => {
   const resolved = resolveAppPath(filePath);
+  const dir = path.dirname(resolved);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(resolved, content, 'utf-8');
 });
 
 ipcMain.handle('save-file-dialog', async (_event, defaultName: string, content: string, filters: Electron.FileFilter[]) => {
   const result = await dialog.showSaveDialog({
-    defaultPath: defaultName,
+    defaultPath: defaultName,  // caller can pass full path (dir + filename)
     filters,
   });
   if (result.canceled || !result.filePath) return null;
@@ -246,6 +258,20 @@ ipcMain.handle('get-app-root', () => {
   return appRoot();
 });
 
+ipcMain.handle('get-plans-dir', () => {
+  return resolveAppPath('plans');
+});
+
+ipcMain.handle('get-config-dir', () => {
+  return appRoot();
+});
+
+ipcMain.handle('open-folder', async (_event, folderPath: string) => {
+  if (fs.existsSync(folderPath)) {
+    await shell.openPath(folderPath);
+  }
+});
+
 ipcMain.handle('check-environment', async () => {
   return await checkEnvironment();
 });
@@ -291,14 +317,24 @@ function sendProgress(msg: string): void {
 
 
 
-/** 查找可用的 Python 可执行文件 (优先本地便携版) */
+/** 检查 Python 版本是否为 3.12.x 或 3.13.x */
+function isAllowedPythonVersion(versionOutput: string): boolean {
+  const m = versionOutput.match(/(\d+)\.(\d+)/);
+  if (!m) return false;
+  const major = parseInt(m[1], 10);
+  const minor = parseInt(m[2], 10);
+  return major === 3 && (minor === 12 || minor === 13);
+}
+
+/** 查找可用的 Python 可执行文件 (优先本地便携版, 仅接受 3.12/3.13) */
 async function findPython(): Promise<string | null> {
   // 优先使用本地便携版 Python
   const localPython = path.join(appRoot(), 'python', 'python.exe');
   if (fs.existsSync(localPython)) {
     try {
-      await execAsync(`"${localPython}" --version`, { windowsHide: true });
-      return localPython;
+      const { stdout } = await execAsync(`"${localPython}" --version`, { windowsHide: true });
+      if (isAllowedPythonVersion(stdout)) return localPython;
+      sendProgress(`WARNING 本地 Python 版本不兼容: ${stdout.trim()}（需要 3.12 或 3.13）`);
     } catch { /* local Python broken */ }
   }
   // 回退到系统全局 Python (依赖通过 PYTHONUSERBASE + --no-user 确保安装到项目目录)
@@ -306,7 +342,8 @@ async function findPython(): Promise<string | null> {
   // 而 Node.js spawn() 不经过 shell，无法执行 .bat 文件。
   for (const cmd of ['python', 'python3']) {
     try {
-      await execAsync(`${cmd} --version`, { windowsHide: true });
+      const { stdout: verOut } = await execAsync(`${cmd} --version`, { windowsHide: true });
+      if (!isAllowedPythonVersion(verOut)) continue;
       // 通过 Python 自身获取真实可执行文件路径 (解决 pyenv/.bat shim 问题)
       const { stdout } = await execAsync(
         `${cmd} -c "import sys; print(sys.executable)"`,
@@ -322,11 +359,46 @@ async function findPython(): Promise<string | null> {
   return null;
 }
 
-/** 安装便携版 Python 到项目目录 */
+/** 安装/初始化便携版 Python（已随应用打包，仅需确保 pip 就绪） */
 async function installPortablePython(): Promise<{ success: boolean }> {
   const pythonDir = path.join(appRoot(), 'python');
   const pythonExe = path.join(pythonDir, 'python.exe');
-  if (fs.existsSync(pythonExe)) return { success: true };
+
+  if (!fs.existsSync(pythonExe)) {
+    // 兜底: 如果打包产物缺失 python，尝试在线下载
+    sendProgress('WARNING 未找到内置 Python，尝试在线下载…');
+    return downloadPortablePython();
+  }
+
+  // 确保 ._pth 配置正确
+  ensurePthFile();
+
+  // 检查 pip 是否可用
+  try {
+    await execAsync(`"${pythonExe}" -m pip --version`, { windowsHide: true, timeout: 15000 });
+    sendProgress('内置 Python + pip 就绪 ✓');
+    return { success: true };
+  } catch { /* pip not available, install it */ }
+
+  // pip 缺失则安装
+  sendProgress('正在安装 pip…');
+  const getPipPath = path.join(app.getPath('temp'), 'get-pip.py');
+  try {
+    await execAsync(`curl -sSL -o "${getPipPath}" "https://bootstrap.pypa.io/get-pip.py"`, { windowsHide: true, timeout: 60000 });
+    await execAsync(`"${pythonExe}" "${getPipPath}"`, { windowsHide: true, timeout: 120000 });
+    try { fs.unlinkSync(getPipPath); } catch { /* ignore */ }
+    sendProgress('pip 安装完成 ✓');
+    return { success: true };
+  } catch {
+    sendProgress('ERROR pip 安装失败');
+    return { success: false };
+  }
+}
+
+/** 兜底: 在线下载便携版 Python（仅在内置 Python 缺失时使用） */
+async function downloadPortablePython(): Promise<{ success: boolean }> {
+  const pythonDir = path.join(appRoot(), 'python');
+  const pythonExe = path.join(pythonDir, 'python.exe');
 
   const version = '3.12.8';
   const zipUrl = `https://www.python.org/ftp/python/${version}/python-${version}-embed-amd64.zip`;
@@ -352,19 +424,7 @@ async function installPortablePython(): Promise<{ success: boolean }> {
     return { success: false };
   }
 
-  // 启用 site-packages (pip 所需)
-  // 嵌入式 Python 的 ._pth 文件存在时会忽略 PYTHONPATH 环境变量，
-  // 因此必须将 site-packages 路径直接写入 ._pth 文件
-  const pthFile = path.join(pythonDir, 'python312._pth');
-  if (fs.existsSync(pthFile)) {
-    let content = fs.readFileSync(pthFile, 'utf-8');
-    content = content.replace(/^#\s*import site/m, 'import site');
-    // 添加本地 site-packages 目录 (相对于 python.exe 所在目录)
-    if (!content.includes('site-packages')) {
-      content = content.trimEnd() + '\nsite-packages\n';
-    }
-    fs.writeFileSync(pthFile, content, 'utf-8');
-  }
+  ensurePthFile();
 
   // 安装 pip
   sendProgress('正在安装 pip…');
@@ -403,28 +463,59 @@ function sysPathInsert(): string {
 /** 确保嵌入式 Python 的 ._pth 包含 site-packages（每次检查前都执行） */
 function ensurePthFile(): void {
   const pythonDir = path.join(appRoot(), 'python');
-  const pthFile = path.join(pythonDir, 'python312._pth');
-  if (!fs.existsSync(pthFile)) return;
-  let content = fs.readFileSync(pthFile, 'utf-8');
-  let changed = false;
-  if (/^#\s*import site/m.test(content)) {
-    content = content.replace(/^#\s*import site/m, 'import site');
-    changed = true;
+  for (const pthName of ['python312._pth', 'python313._pth']) {
+    const pthFile = path.join(pythonDir, pthName);
+    if (!fs.existsSync(pthFile)) continue;
+    let content = fs.readFileSync(pthFile, 'utf-8');
+    let changed = false;
+    // 去除可能的 BOM
+    if (content.charCodeAt(0) === 0xFEFF) {
+      content = content.slice(1);
+      changed = true;
+    }
+    if (/^#\s*import site/m.test(content)) {
+      content = content.replace(/^#\s*import site/m, 'import site');
+      changed = true;
+    }
+    if (!content.includes('site-packages')) {
+      content = content.trimEnd() + '\nsite-packages\n';
+      changed = true;
+    }
+    if (changed) fs.writeFileSync(pthFile, content, 'utf-8');
   }
-  if (!content.includes('site-packages')) {
-    content = content.trimEnd() + '\nsite-packages\n';
-    changed = true;
+}
+
+/** 检查并安装 VC++ Redistributable（c10.dll 等依赖需要） */
+async function ensureVCRedist(): Promise<void> {
+  // vcruntime140.dll 存在于 system32 说明已安装
+  const dllPath = path.join(process.env.SYSTEMROOT || 'C:\\Windows', 'System32', 'vcruntime140.dll');
+  if (fs.existsSync(dllPath)) return;
+
+  sendProgress('Microsoft Visual C++ Redistributable is not installed, this may lead to the DLL load failure.');
+  const redistExe = path.join(appRoot(), 'redist', 'vc_redist.x64.exe');
+  if (!fs.existsSync(redistExe)) {
+    sendProgress(`It can be downloaded at https://aka.ms/vs/17/release/vc_redist.x64.exe`);
+    return;
   }
-  if (changed) fs.writeFileSync(pthFile, content, 'utf-8');
+
+  sendProgress('正在安装 Visual C++ Redistributable…');
+  try {
+    await execAsync(`"${redistExe}" /install /quiet /norestart`, { windowsHide: true, timeout: 120000 });
+    sendProgress('Visual C++ Redistributable 安装完成 ✓');
+  } catch {
+    sendProgress('WARNING VC++ Redistributable 安装失败，请手动运行 redist\\vc_redist.x64.exe');
+  }
 }
 
 /** 检查 Python 环境和所需包 */
 async function checkEnvironment(): Promise<EnvCheckResult> {
+  sendProgress('正在检查运行环境…');
+  await ensureVCRedist();
   sendProgress('正在检查 Python 环境…');
   ensurePthFile();
   const pythonCmd = await findPython();
   if (!pythonCmd) {
-    sendProgress('WARNING 未找到 Python');
+    sendProgress('WARNING 未找到兼容的 Python（需要 3.12 或 3.13）');
     return { pythonCmd: null, pythonVersion: null, missingPackages: [], allReady: false };
   }
 

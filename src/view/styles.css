@@ -344,6 +344,34 @@ body {
   gap: 12px;
 }
 
+.plans-dir-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.hint-path {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  word-break: break-all;
+  user-select: all;
+}
+
+.btn-link {
+  background: transparent;
+  color: var(--accent);
+  border: none;
+  text-decoration: underline;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn-link:hover {
+  opacity: 0.8;
+}
+
 /* ═══ 远征倒计时 ═══ */
 .expedition-bar {
   display: flex;
@@ -1247,6 +1275,12 @@ input[type="checkbox"]:focus-visible {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.config-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .config-page-title {

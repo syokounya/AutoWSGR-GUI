@@ -29,8 +29,17 @@ echo [1/3] Checking Python...
 :: Check local portable Python first
 if exist "%PYTHON_EXE%" (
     for /f "tokens=2 delims= " %%v in ('"%PYTHON_EXE%" --version 2^>^&1') do set "PY_VER=%%v"
-    echo       OK: Local Python !PY_VER!
-    goto :python_ok
+    for /f "tokens=1,2 delims=." %%a in ("!PY_VER!") do (
+        if %%a==3 if %%b==12 (
+            echo       OK: Local Python !PY_VER!
+            goto :python_ok
+        )
+        if %%a==3 if %%b==13 (
+            echo       OK: Local Python !PY_VER!
+            goto :python_ok
+        )
+    )
+    echo       WARNING: Local Python !PY_VER! not compatible (need 3.12 or 3.13^)
 )
 
 :: Check system Python
@@ -39,12 +48,18 @@ where python >nul 2>&1
 if %errorlevel%==0 (
     for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do set "PY_VER=%%v"
     for /f "tokens=1,2 delims=." %%a in ("!PY_VER!") do (
-        if %%a GEQ 3 if %%b GEQ 12 (
+        if %%a==3 if %%b==12 (
+            set "PYTHON_EXE=python"
+            echo       OK: System Python !PY_VER!
+            goto :python_ok
+        )
+        if %%a==3 if %%b==13 (
             set "PYTHON_EXE=python"
             echo       OK: System Python !PY_VER!
             goto :python_ok
         )
     )
+    echo       WARNING: System Python !PY_VER! not compatible (need 3.12 or 3.13^)
 )
 
 :: Download portable Python

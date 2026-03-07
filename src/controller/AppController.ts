@@ -52,12 +52,16 @@ import type { MapData } from '../model/MapDataLoader';
 
 /** 通过 preload 注入的 IPC 桥 */
 interface ElectronBridge {
-  openFileDialog: (filters: { name: string; extensions: string[] }[]) => Promise<{ path: string; content: string } | null>;
+  openDirectoryDialog: (title?: string) => Promise<string | null>;
+  openFileDialog: (filters: { name: string; extensions: string[] }[], defaultDir?: string) => Promise<{ path: string; content: string } | null>;
   saveFile: (path: string, content: string) => Promise<void>;
   saveFileDialog: (defaultName: string, content: string, filters: { name: string; extensions: string[] }[]) => Promise<string | null>;
   readFile: (path: string) => Promise<string>;
   detectEmulator: () => Promise<{ type: string; path: string; serial: string; adbPath: string } | null>;
   getAppRoot: () => Promise<string>;
+  getPlansDir: () => Promise<string>;
+  getConfigDir: () => Promise<string>;
+  openFolder: (folderPath: string) => Promise<void>;
   checkEnvironment: () => Promise<{
     pythonCmd: string | null;
     pythonVersion: string | null;
@@ -118,6 +122,8 @@ export class AppController {
   private expeditionTimerText = '--:--';
   private currentProgress = '';
   private appRoot = '';
+  private plansDir = '';
+  private configDir = '';
   private editingNodeId: string | null = null;
 
   constructor() {
@@ -174,6 +180,19 @@ export class AppController {
     if (bridge.getAppRoot) {
       this.appRoot = await bridge.getAppRoot();
     }
+    if (bridge.getPlansDir) {
+      this.plansDir = await bridge.getPlansDir();
+    }
+    if (bridge.getConfigDir) {
+      this.configDir = await bridge.getConfigDir();
+    }
+
+    // 显示关键路径，帮助用户找到配置和方案目录
+    this.appendLocalLog('info', `配置文件目录: ${this.configDir}`);
+    this.appendLocalLog('info', `方案文件目录: ${this.plansDir}`);
+
+    // 更新方案空状态页的路径提示
+    this.updatePlanEmptyHint();
 
     // 接收后端关键日志并显示到日志面板
     if (bridge.onBackendLog) {
@@ -322,6 +341,9 @@ export class AppController {
       ? `${this.appRoot.replace(/\\/g, '/')}/usersettings.yaml`
       : undefined;
 
+    // 从配置加载远征检查间隔
+    this.scheduler.setExpeditionInterval(this.configModel.current.daily_automation.expedition_interval);
+
     this.scheduler.start(configPath).then((ok) => {
       if (ok) {
         this.appendLocalLog('info', '系统启动成功 ✓');
@@ -350,9 +372,28 @@ export class AppController {
       const yamlStr = await bridge.readFile('usersettings.yaml');
       this.configModel.loadFromYaml(yamlStr);
     } catch {
-      // 文件不存在时使用默认值
-      console.log('usersettings.yaml 未找到，使用默认配置');
+      // 文件不存在时使用默认值，并自动保存一份供用户参考
+      console.log('usersettings.yaml 未找到，自动创建默认配置');
+      const defaultYaml = this.configModel.toYaml();
+      await bridge.saveFile('usersettings.yaml', defaultYaml);
+      this.appendLocalLog('info', `已创建默认配置文件: ${this.configDir}\\usersettings.yaml`);
     }
+  }
+
+  /** 更新方案空状态页的路径提示 */
+  private updatePlanEmptyHint(): void {
+    const hintEl = document.getElementById('plans-dir-hint');
+    if (hintEl && this.plansDir) {
+      hintEl.textContent = this.plansDir;
+      hintEl.title = this.plansDir;
+    }
+  }
+
+  /** 在资源管理器中打开指定文件夹 */
+  private openFolder(folderPath: string): void {
+    if (!folderPath) return;
+    const bridge = window.electronBridge;
+    if (bridge?.openFolder) bridge.openFolder(folderPath);
   }
 
   // ════════════════════════════════════════
@@ -425,6 +466,20 @@ export class AppController {
 
     // 保存配置
     document.getElementById('btn-save-config')?.addEventListener('click', () => this.saveConfig());
+
+    // 打开文件夹快捷按钮
+    document.getElementById('btn-open-plans-dir')?.addEventListener('click', () => this.openFolder(this.plansDir));
+    document.getElementById('btn-open-config-dir')?.addEventListener('click', () => this.openFolder(this.configDir));
+
+    // 模拟器路径浏览按钮
+    document.getElementById('btn-browse-emu')?.addEventListener('click', async () => {
+      const bridge = window.electronBridge;
+      if (!bridge) return;
+      const dir = await bridge.openDirectoryDialog('选择模拟器安装目录');
+      if (dir) {
+        (document.getElementById('cfg-emu-path') as HTMLInputElement).value = dir;
+      }
+    });
 
     // 停止当前任务
     document.getElementById('btn-stop-task')?.addEventListener('click', () => this.scheduler.stopCurrentTask());
@@ -634,7 +689,7 @@ export class AppController {
 
     const result = await bridge.openFileDialog([
       { name: 'YAML 方案/任务预设', extensions: ['yaml', 'yml'] },
-    ]);
+    ], this.plansDir || undefined);
     if (!result) return;
 
     try {
@@ -865,11 +920,13 @@ export class AppController {
     if (!bridge) return;
 
     const yamlStr = this.currentPlan.toYaml();
-    const defaultName = this.currentPlan.fileName
+    const fileName = this.currentPlan.fileName
       ? this.currentPlan.fileName.split(/[\\/]/).pop() || `${this.currentPlan.mapName}.yaml`
       : `${this.currentPlan.mapName}.yaml`;
+    // 默认保存到方案目录
+    const defaultPath = this.plansDir ? `${this.plansDir}\\${fileName}` : fileName;
 
-    const saved = await bridge.saveFileDialog(defaultName, yamlStr, [
+    const saved = await bridge.saveFileDialog(defaultPath, yamlStr, [
       { name: 'YAML 方案', extensions: ['yaml', 'yml'] },
     ]);
     if (saved) {
@@ -1050,6 +1107,7 @@ export class AppController {
       emulatorSerial: cfg.emulator.serial || '',
       gameApp: cfg.account.game_app,
       autoExpedition: cfg.daily_automation.auto_expedition,
+      expeditionInterval: cfg.daily_automation.expedition_interval,
       autoBattle: cfg.daily_automation.auto_battle,
       battleType: cfg.daily_automation.battle_type,
       autoExercise: cfg.daily_automation.auto_exercise,
@@ -1078,6 +1136,7 @@ export class AppController {
       account: { game_app: collected.gameApp },
       daily_automation: {
         auto_expedition: collected.autoExpedition,
+        expedition_interval: collected.expeditionInterval,
         auto_battle: collected.autoBattle,
         battle_type: collected.battleType,
         auto_exercise: collected.autoExercise,
@@ -1095,6 +1154,9 @@ export class AppController {
       battleType: da.battle_type,
       battleTimes: da.battle_times,
     });
+
+    // 同步远征检查间隔
+    this.scheduler.setExpeditionInterval(da.expedition_interval);
 
     const yamlStr = this.configModel.toYaml();
     console.log('保存配置:\n', yamlStr);

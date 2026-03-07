@@ -86,7 +86,7 @@ export interface SchedulerCallbacks {
 // Scheduler 实现
 // ════════════════════════════════════════
 
-const EXPEDITION_INTERVAL_MS = 15 * 60 * 1000; // 15 分钟
+const DEFAULT_EXPEDITION_INTERVAL_MS = 15 * 60 * 1000; // 15 分钟
 const EXPEDITION_TIMER_TICK_MS = 1000;          // 每秒更新倒计时
 
 let nextTaskId = 1;
@@ -110,6 +110,7 @@ export class Scheduler {
   private expeditionTimer: ReturnType<typeof setInterval> | null = null;
   private expeditionTickTimer: ReturnType<typeof setInterval> | null = null;
   private lastExpeditionCheck = 0; // timestamp ms
+  private expeditionIntervalMs = DEFAULT_EXPEDITION_INTERVAL_MS;
 
   constructor(api: ApiClient) {
     this.api = api;
@@ -120,6 +121,16 @@ export class Scheduler {
 
   setCallbacks(cb: SchedulerCallbacks): void {
     this.callbacks = cb;
+  }
+
+  /** 更新远征检查间隔（分钟），立即重启定时器 */
+  setExpeditionInterval(minutes: number): void {
+    const clamped = Math.max(1, Math.min(120, minutes));
+    this.expeditionIntervalMs = clamped * 60 * 1000;
+    // 如果定时器已在运行，重启以应用新间隔
+    if (this.expeditionTimer) {
+      this.startExpeditionTimer();
+    }
   }
 
   get status(): SchedulerStatus {
@@ -343,15 +354,15 @@ export class Scheduler {
     this.lastExpeditionCheck = Date.now();
     this.stopExpeditionTimer();
 
-    // 主定时器: 每 15 分钟触发远征检查
+    // 主定时器: 按配置间隔触发远征检查
     this.expeditionTimer = setInterval(() => {
       this.triggerExpeditionCheck();
-    }, EXPEDITION_INTERVAL_MS);
+    }, this.expeditionIntervalMs);
 
     // 倒计时 tick: 每秒通知 Controller 剩余时间
     this.expeditionTickTimer = setInterval(() => {
       const elapsed = Date.now() - this.lastExpeditionCheck;
-      const remaining = Math.max(0, EXPEDITION_INTERVAL_MS - elapsed);
+      const remaining = Math.max(0, this.expeditionIntervalMs - elapsed);
       this.callbacks.onExpeditionTimerTick?.(Math.ceil(remaining / 1000));
     }, EXPEDITION_TIMER_TICK_MS);
   }

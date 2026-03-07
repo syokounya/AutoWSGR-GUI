@@ -392,12 +392,13 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
   } catch { /* ignore */ }
 
   sendProgress('正在检查依赖包…');
-  // uvicorn/fastapi 用 pip show 检测存在性
+  // 用 import 检测存在性 (pip show / importlib.metadata 无法识别 --target 安装的包，
+  // 但 PYTHONPATH 对 import 有效)
   const simplePackages = ['uvicorn', 'fastapi'];
   const missingPackages: string[] = [];
   for (const pkg of simplePackages) {
     try {
-      await execAsync(`"${pythonCmd}" -m pip show ${pkg}`, {
+      await execAsync(`"${pythonCmd}" -c "import ${pkg}"`, {
         windowsHide: true,
         env: pipEnv(),
       });
@@ -411,7 +412,7 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
   let autowsgrOk = false;
   try {
     const { stdout } = await execAsync(
-      `"${pythonCmd}" -c "from importlib.metadata import version; print(version('autowsgr'))"`,
+      `"${pythonCmd}" -c "import autowsgr; print(autowsgr.__version__)"`,
       { windowsHide: true, env: pipEnv() },
     );
     const ver = stdout.trim();

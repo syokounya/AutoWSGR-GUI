@@ -517,10 +517,60 @@ async function ensureVCRedist(): Promise<void> {
   }
 }
 
+/** 环境就绪标记文件路径 */
+const ENV_READY_MARKER = () => path.join(appRoot(), '.env_ready');
+
+/** 最低 autowsgr 版本要求 */
+const MIN_AUTOWSGR_VERSION = [2, 0, 4];
+
+/** 检查 autowsgr 版本是否满足最低要求 */
+function isVersionOk(ver: string): boolean {
+  const parts = ver.replace(/[^0-9.]/g, '.').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((parts[i] || 0) > (MIN_AUTOWSGR_VERSION[i] || 0)) return true;
+    if ((parts[i] || 0) < (MIN_AUTOWSGR_VERSION[i] || 0)) return false;
+  }
+  return true;
+}
+
+/** 读取标记文件中保存的 autowsgr 版本；标记不存在或无效时返回 null */
+function readEnvMarker(): { pythonCmd: string; pythonVersion: string; autowsgrVersion: string } | null {
+  try {
+    const data = JSON.parse(fs.readFileSync(ENV_READY_MARKER(), 'utf-8'));
+    if (data && data.pythonCmd && data.autowsgrVersion && isVersionOk(data.autowsgrVersion)) {
+      // 确保记录的 python 路径仍然存在
+      if (fs.existsSync(data.pythonCmd)) return data;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/** 写入环境就绪标记 */
+function writeEnvMarker(pythonCmd: string, pythonVersion: string, autowsgrVersion: string): void {
+  try {
+    fs.writeFileSync(ENV_READY_MARKER(), JSON.stringify({ pythonCmd, pythonVersion, autowsgrVersion }), 'utf-8');
+  } catch { /* ignore */ }
+}
+
 /** 检查 Python 环境和所需包 */
 async function checkEnvironment(): Promise<EnvCheckResult> {
   sendProgress('正在检查运行环境…');
   await ensureVCRedist();
+
+  // ── 快速路径: 如果标记文件存在且有效，跳过重量级依赖检查 ──
+  const marker = readEnvMarker();
+  if (marker) {
+    sendProgress(`环境就绪 (缓存: ${marker.pythonVersion}, autowsgr ${marker.autowsgrVersion}) ✓`);
+    cachedPythonCmd = marker.pythonCmd;
+    return {
+      pythonCmd: marker.pythonCmd,
+      pythonVersion: marker.pythonVersion,
+      missingPackages: [],
+      allReady: true,
+    };
+  }
+
+  // ── 完整检查路径 ──
   sendProgress('正在检查 Python 环境…');
   ensurePthFile();
   const pythonCmd = await findPython();
@@ -558,6 +608,7 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
     'print(json.dumps(r))',
   ].join('\n'), 'utf-8');
 
+  let autowsgrVersion = '';
   try {
     const { stdout: depOut } = await execAsync(
       `"${pythonCmd}" "${checkScript}"`,
@@ -577,18 +628,11 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
 
     if (depResult.autowsgr != null) {
       const ver = String(depResult.autowsgr);
-      const parts = ver.replace(/[^0-9.]/g, '.').split('.').map(Number);
-      const minParts = [2, 0, 4];
-      let ok = false;
-      for (let i = 0; i < 3; i++) {
-        if ((parts[i] || 0) > (minParts[i] || 0)) { ok = true; break; }
-        if ((parts[i] || 0) < (minParts[i] || 0)) { ok = false; break; }
-        if (i === 2) ok = true;
-      }
-      if (ok) {
+      if (isVersionOk(ver)) {
         sendProgress(`  autowsgr ${ver} \u2713`);
+        autowsgrVersion = ver;
       } else {
-        sendProgress(`  autowsgr ${ver} < 2.0.4 \u2717`);
+        sendProgress(`  autowsgr ${ver} < ${MIN_AUTOWSGR_VERSION.join('.')} \u2717`);
         missingPackages.push('autowsgr');
       }
     } else {
@@ -601,15 +645,18 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
     sendProgress('  依赖检查失败');
   }
 
-  if (missingPackages.length === 0) {
+  const allReady = missingPackages.length === 0;
+  if (allReady) {
     sendProgress('依赖检查通过 ✓');
+    // 写入标记文件，下次启动可跳过检查
+    writeEnvMarker(pythonCmd, pythonVersion || '', autowsgrVersion);
   }
 
   return {
     pythonCmd,
     pythonVersion,
     missingPackages,
-    allReady: missingPackages.length === 0,
+    allReady,
   };
 }
 
@@ -704,6 +751,8 @@ function findPythonSync(): string | null {
 
 /** 自动安装依赖 (pip install autowsgr)，始终安装到项目目录，不动全局 */
 function installDependencies(pythonCmd: string): Promise<{ success: boolean; output: string }> {
+  // 安装后环境变化，清除标记以便下次重新检查
+  try { fs.unlinkSync(ENV_READY_MARKER()); } catch { /* ignore */ }
   return new Promise((resolve) => {
     const cwd = appRoot();
     const targetDir = localSitePackages();
@@ -738,6 +787,8 @@ function installDependencies(pythonCmd: string): Promise<{ success: boolean; out
 
 /** 更新 autowsgr 包 (pip install --upgrade --target) */
 function pullUpdates(): Promise<{ success: boolean; output: string }> {
+  // 更新后清除环境标记
+  try { fs.unlinkSync(ENV_READY_MARKER()); } catch { /* ignore */ }
   return new Promise((resolve) => {
     const pythonCmd = findPythonSync();
     if (!pythonCmd) {

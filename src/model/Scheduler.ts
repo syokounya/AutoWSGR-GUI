@@ -53,6 +53,10 @@ export interface SchedulerTask {
   backendTaskId?: string;
   /** 可选的停止条件: 每轮完成后检查，满足则不再后触发 */
   stopCondition?: StopCondition;
+  /** 失败后最大重试次数 (默认 2) */
+  maxRetries: number;
+  /** 当前已重试次数 */
+  retryCount: number;
 }
 
 // ════════════════════════════════════════
@@ -219,6 +223,8 @@ export class Scheduler {
       request,
       remainingTimes: times,
       stopCondition,
+      maxRetries: 2,
+      retryCount: 0,
     };
 
     // 按优先级插入队列
@@ -287,15 +293,35 @@ export class Scheduler {
       if (resp.success && resp.data) {
         task.backendTaskId = resp.data.task_id;
       } else {
-        // 启动失败，跳过
+        // 启动失败，尝试重试
         this.currentTask = null;
-        this.callbacks.onTaskCompleted?.(task.id, false, null, resp.error ?? '任务启动失败');
-        this.consumeNext();
+        if (task.retryCount < task.maxRetries) {
+          task.retryCount++;
+          this.emitLog('warn', `任务「${task.name}」启动失败，${task.retryCount}/${task.maxRetries} 次重试 (5s 后)`);
+          setTimeout(() => {
+            this.insertByPriority(task);
+            this.notifyQueueChange();
+            this.consumeNext();
+          }, 5000);
+        } else {
+          this.callbacks.onTaskCompleted?.(task.id, false, null, resp.error ?? '任务启动失败');
+          this.consumeNext();
+        }
       }
     } catch (e) {
       this.currentTask = null;
-      this.callbacks.onTaskCompleted?.(task.id, false, null, String(e));
-      this.consumeNext();
+      if (task.retryCount < task.maxRetries) {
+        task.retryCount++;
+        this.emitLog('warn', `任务「${task.name}」异常，${task.retryCount}/${task.maxRetries} 次重试 (5s 后)`);
+        setTimeout(() => {
+          this.insertByPriority(task);
+          this.notifyQueueChange();
+          this.consumeNext();
+        }, 5000);
+      } else {
+        this.callbacks.onTaskCompleted?.(task.id, false, null, String(e));
+        this.consumeNext();
+      }
     }
   }
 
@@ -304,10 +330,31 @@ export class Scheduler {
     const finished = this.currentTask;
     if (!finished) return;
 
-    this.callbacks.onTaskCompleted?.(finished.id, success, result, error);
+    // 执行失败 → 尝试重试
+    if (!success) {
+      if (finished.retryCount < finished.maxRetries) {
+        finished.retryCount++;
+        this.emitLog('warn', `任务「${finished.name}」执行失败，${finished.retryCount}/${finished.maxRetries} 次重试 (5s 后)`);
+        this.callbacks.onTaskCompleted?.(finished.id, false, result, error);
+        this.currentTask = null;
+        setTimeout(() => {
+          this.insertByPriority(finished);
+          this.notifyQueueChange();
+          this.consumeNext();
+        }, 5000);
+        return;
+      }
+      // 重试耗尽
+      this.callbacks.onTaskCompleted?.(finished.id, false, result, error);
+      this.currentTask = null;
+      this.consumeNext();
+      return;
+    }
+
+    this.callbacks.onTaskCompleted?.(finished.id, true, result, error);
 
     // 后触发: 如果还有剩余次数，追加一个新任务回队列
-    if (success && finished.remainingTimes > 1) {
+    if (finished.remainingTimes > 1) {
       // 检查停止条件
       if (finished.stopCondition) {
         const shouldStop = await this.checkStopCondition(finished.stopCondition, finished.name);
@@ -327,6 +374,8 @@ export class Scheduler {
         request: finished.request,
         remainingTimes: finished.remainingTimes - 1,
         stopCondition: finished.stopCondition,
+        maxRetries: finished.maxRetries,
+        retryCount: 0,
       };
       this.insertByPriority(followUp);
     }

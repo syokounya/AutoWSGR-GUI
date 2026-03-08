@@ -1,14 +1,14 @@
 {
-  "activeGroup": "1234",
+  "activeGroup": "9-2捞胖次",
   "groups": [
     {
-      "name": "1234",
+      "name": "9-2捞胖次",
       "items": [
         {
-          "path": "E:\\wsgrgui\\plans\\自动演习.yaml",
-          "kind": "preset",
-          "times": 1,
-          "label": "自动演习"
+          "path": "E:\\wsgrgui\\plans\\9-2捞胖次.yaml",
+          "kind": "plan",
+          "times": 9999,
+          "label": "9-2捞胖次"
         }
       ]
     }

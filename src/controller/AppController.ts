@@ -200,6 +200,20 @@ export class AppController {
     this.appendLocalLog('info', `配置文件目录: ${this.configDir}`);
     this.appendLocalLog('info', `方案文件目录: ${this.plansDir}`);
 
+    // ── 1. 加载配置 & 渲染 (在环境检查前完成, 避免配置页长时间显示默认值) ──
+    await this.loadConfig();
+    const da = this.configModel.current.daily_automation;
+    this.cronScheduler.updateConfig({
+      autoExercise: da.auto_exercise,
+      exerciseFleetId: da.exercise_fleet_id,
+      autoBattle: da.auto_battle,
+      battleType: da.battle_type,
+      battleTimes: da.battle_times,
+    });
+    await this.detectAndApplyEmulator();
+    this.renderConfig();
+    this.mainView.setDebugMode(localStorage.getItem('debugMode') === 'true');
+
     // 加载任务组
     await this.taskGroupModel.load();
     this.renderTaskGroup();
@@ -223,28 +237,12 @@ export class AppController {
       });
     }
 
-    // ── 1. 环境检查 ──
+    // ── 2. 环境检查 ──
     const envReady = await this.checkAndPrepareEnv(bridge);
     if (!envReady) return; // 日志中已输出错误信息
 
-    // ── 2. 检查更新 (非阻塞) ──
+    // ── 3. 检查更新 (非阻塞) ──
     this.checkForUpdates(bridge);
-
-    // ── 3. 加载配置 & 检测模拟器 ──
-    await this.loadConfig();
-    // 将磁盘配置同步到定时调度器 (构造时使用的是默认值)
-    const da = this.configModel.current.daily_automation;
-    this.cronScheduler.updateConfig({
-      autoExercise: da.auto_exercise,
-      exerciseFleetId: da.exercise_fleet_id,
-      autoBattle: da.auto_battle,
-      battleType: da.battle_type,
-      battleTimes: da.battle_times,
-    });
-    await this.detectAndApplyEmulator();
-    this.renderConfig();
-    // 初始化调试模式
-    this.mainView.setDebugMode(localStorage.getItem('debugMode') === 'true');
 
     // ── 4. 启动后端 & 连接 ──
     this.appendLocalLog('info', '正在启动后端服务…');
@@ -587,6 +585,8 @@ export class AppController {
       const label = document.getElementById('cfg-accent-label')!;
       picker.value = '#0f7dff';
       label.textContent = '#0f7dff';
+      localStorage.setItem('accentColor', '#0f7dff');
+      this.applyTheme();
     });
 
     // 主题：切换模式实时预览

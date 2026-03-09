@@ -50,9 +50,8 @@
   说明：当前仅能检测“是否已安装”和路径，尚未检查“是否正在运行”“ADB 是否在线”。
   说明：后续需要后端或主进程补充 adb devices、连接测试、进程状态检测。
 
-- [ ] ADB、Python 资源在前端安装时打包携带
-  说明：Python 已打包并可自动准备；ADB 目前主要依赖模拟器自带 adb，可执行文件路径来自模拟器安装目录。
-  说明：若要完全自携带 ADB，需要新增资源打包、版本管理与优先级策略。
+- [x] ADB、Python 资源在前端安装时打包携带
+  说明：Python 已打包（嵌入式 Python 3.12）；ADB 已打包（Google platform-tools，adb.exe + DLL），通过 prepare-adb.js 自动下载，electron-builder extraFiles 打包，启动后端时注入 PATH 环境变量使后端自动发现。
 
 ### 导入战斗文件并执行
 

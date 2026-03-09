@@ -1465,6 +1465,7 @@ body {
 .input-row {
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
 .input-row .input {
@@ -1516,11 +1517,41 @@ select.input {
   color: var(--text-muted);
 }
 
+/* ═══ 方案预览页整体布局 ═══ */
+.plan-page-layout {
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 52px - 32px);
+}
+
+.plan-page-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.plan-page-layout .template-library-card {
+  width: 260px;
+  flex-shrink: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.plan-page-main .empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
 /* ═══ 方案预览双栏布局 ═══ */
 .plan-layout {
   display: flex;
   gap: 16px;
-  height: calc(100vh - 52px - 32px);
+  flex: 1;
+  min-height: 0;
 }
 
 .plan-left {
@@ -1710,4 +1741,276 @@ input[type="checkbox"]:focus-visible {
   display: flex;
   gap: 8px;
   padding-top: 4px;
+}
+
+/* ═══ 模板向导 ═══ */
+.wizard-modal {
+  width: 480px;
+  max-width: 90vw;
+}
+.wizard-header {
+  margin-bottom: 24px;
+}
+.wizard-header h3 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0;
+}
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 8px;
+}
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.wizard-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.wizard-step-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+.wizard-step-line {
+  flex: 1;
+  height: 2px;
+  margin: 0 10px;
+  background: var(--border-strong);
+  border-radius: 1px;
+  transition: background 0.2s;
+}
+/* 当前步骤 */
+.wizard-step.active .wizard-step-num {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.wizard-step.active .wizard-step-label {
+  color: var(--text);
+  font-weight: 600;
+}
+/* 已完成步骤 */
+.wizard-step.done .wizard-step-num {
+  border-color: var(--success);
+  background: var(--success);
+  color: #fff;
+}
+.wizard-step.done .wizard-step-label {
+  color: var(--success);
+}
+/* 已完成步骤后面的连接线也变色 */
+.wizard-step.done + .wizard-step-line {
+  background: var(--success);
+}
+.wizard-page {
+  min-height: 120px;
+}
+.template-type-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.template-type-card {
+  cursor: pointer;
+}
+.template-type-card input[type="radio"] {
+  display: none;
+}
+.template-type-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 8px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  transition: all 0.15s;
+  text-align: center;
+}
+.template-type-inner span {
+  font-weight: 600;
+  font-size: 14px;
+}
+.template-type-inner small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.template-type-card input[type="radio"]:checked + .template-type-inner {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--primary);
+}
+.template-type-inner:hover {
+  border-color: var(--primary);
+}
+
+/* ═══ 编队设置网格 ═══ */
+.fleet-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.fleet-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+.fleet-pos {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.fleet-ship {
+  flex: 1;
+}
+
+/* ═══ 舰船名称自动补全 ═══ */
+.ship-autocomplete {
+  position: absolute;
+  left: 30px;  /* 跳过 fleet-pos 圆圈 (22px + 8px gap) */
+  right: 0;
+  top: 100%;
+  z-index: 1100;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  margin-top: 2px;
+}
+.ship-ac-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  gap: 8px;
+  background: var(--bg-card-solid);
+}
+.ship-ac-item:hover,
+.ship-ac-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+.ship-ac-item.active .ship-ac-meta,
+.ship-ac-item:hover .ship-ac-meta {
+  color: rgba(255,255,255,0.8);
+}
+.ship-ac-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ship-ac-name b {
+  font-weight: 700;
+  color: var(--accent);
+}
+.ship-ac-item:hover .ship-ac-name b,
+.ship-ac-item.active .ship-ac-name b {
+  color: #fff;
+}
+.ship-ac-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  align-items: center;
+}
+
+/* ═══ 模板库 ═══ */
+.template-library-card {
+  min-height: 0;
+  flex-shrink: 1;
+  display: flex;
+  flex-direction: column;
+}
+.template-library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.template-library-header h3 {
+  margin: 0;
+}
+.template-library-items {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.tpl-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 12px 0;
+}
+.tpl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  transition: background 0.15s;
+}
+.tpl-item:hover {
+  background: var(--surface);
+}
+.tpl-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.tpl-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tpl-item-type {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.tpl-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }

@@ -609,6 +609,7 @@ async function autoUpdateAutowsgr(pythonCmd: string): Promise<string | null> {
         '--upgrade',
         'setuptools',
         'autowsgr',
+        'airtest-openwsgr',
       ], {
         cwd: appRoot(),
         windowsHide: true,
@@ -629,12 +630,13 @@ async function autoUpdateAutowsgr(pythonCmd: string): Promise<string | null> {
     // 升级后验证关键传递依赖是否完整
     const verifyScript = path.join(app.getPath('temp'), 'autowsgr_verify_deps.py');
     fs.writeFileSync(verifyScript, [
-      'import json, sys',
+      'import json, sys, site',
       `sys.path.insert(0, r'${spFwd}')`,
+      `site.addsitedir(r'${spFwd}')`,
       'missing = []',
       "for m in ['airtest', 'fastapi', 'uvicorn']:",
       '    try: __import__(m)',
-      '    except ImportError: missing.append(m)',
+      '    except Exception: missing.append(m)',
       'print(json.dumps(missing))',
     ].join('\n'), 'utf-8');
 
@@ -647,13 +649,16 @@ async function autoUpdateAutowsgr(pythonCmd: string): Promise<string | null> {
       const missing: string[] = JSON.parse(verifyOut.trim());
 
       if (missing.length > 0) {
+        // 模块名→pip 包名映射 (airtest 模块由 airtest-openwsgr 提供)
+        const modToPkg: Record<string, string> = { airtest: 'airtest-openwsgr' };
+        const pkgs = missing.map(m => modToPkg[m] ?? m);
         sendProgress(`升级后缺少依赖: ${missing.join(', ')}，正在补装…`);
         const fixCode = await new Promise<number>((resolve) => {
           const proc = spawn(pythonCmd, [
             '-m', 'pip', 'install',
             '--target', targetDir,
             '--force-reinstall', '--no-deps',
-            ...missing,
+            ...pkgs,
           ], {
             cwd: appRoot(),
             windowsHide: true,
@@ -672,7 +677,7 @@ async function autoUpdateAutowsgr(pythonCmd: string): Promise<string | null> {
             const proc = spawn(pythonCmd, [
               '-m', 'pip', 'install',
               '--target', targetDir,
-              ...missing,
+              ...pkgs,
             ], {
               cwd: appRoot(),
               windowsHide: true,
@@ -746,17 +751,19 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
   const spFwd = localSitePackages().replace(/\\/g, '/');
   const checkScript = path.join(app.getPath('temp'), 'autowsgr_depcheck.py');
   fs.writeFileSync(checkScript, [
-    'import json, sys',
-    `sys.path.insert(0, '${spFwd}')`,
+    'import json, sys, site',
+    `sp = '${spFwd}'`,
+    'sys.path.insert(0, sp)',
+    'site.addsitedir(sp)',   // 处理 .pth 文件，与后端启动保持一致
     'r = {}',
     "for p in ['uvicorn', 'fastapi', 'airtest']:",
     '    try:',
     '        __import__(p); r[p] = True',
-    '    except ImportError:',
+    '    except Exception:',
     '        r[p] = False',
     'try:',
     '    import autowsgr; r["autowsgr"] = autowsgr.__version__',
-    'except ImportError:',
+    'except Exception:',
     '    r["autowsgr"] = None',
     'print(json.dumps(r))',
   ].join('\n'), 'utf-8');
@@ -927,8 +934,9 @@ function installDependencies(pythonCmd: string): Promise<{ success: boolean; out
       '-m', 'pip', 'install',
       '--target', targetDir,
       '--upgrade',
-      'setuptools',  // provides distutils (removed in Python 3.12)
+      'setuptools',         // provides distutils (removed in Python 3.12)
       'autowsgr',
+      'airtest-openwsgr',   // autowsgr 依赖此 fork，pip 依赖解析可能跳过，需显式声明
     ], {
       cwd,
       windowsHide: true,
@@ -968,6 +976,7 @@ function pullUpdates(): Promise<{ success: boolean; output: string }> {
       '--upgrade',
       'setuptools',
       'autowsgr',
+      'airtest-openwsgr',
     ], {
       cwd: appRoot(),
       windowsHide: true,

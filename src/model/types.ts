@@ -131,3 +131,40 @@ export interface TaskPreset {
   /** 定时触发时间 "HH:MM" 格式 */
   scheduled_time?: string;
 }
+
+// ════════════════════════════════════════
+// 任务模板 (Task Template)
+// ════════════════════════════════════════
+
+/** 模板类型 */
+export type TemplateType = 'normal_fight' | 'exercise' | 'campaign' | 'decisive';
+
+/** 任务模板：可复用的任务蓝图 */
+export interface TaskTemplate {
+  id: string;
+  name: string;
+  type: TemplateType;
+  createdAt: string;
+
+  // normal_fight / event_fight
+  planPath?: string;               // 引用的方案文件路径
+  fleet_id?: number;
+  fleet?: string[];                // 编队舰船名称 (6 个位置)
+
+  // exercise
+  // fleet_id 已定义
+
+  // campaign
+  campaign_name?: string;
+
+  // decisive
+  chapter?: number;
+  level1?: string[];
+  level2?: string[];
+  flagship_priority?: string[];
+
+  // 默认运行时参数
+  defaultTimes?: number;
+  defaultGap?: number;
+  defaultStopCondition?: StopCondition;
+}

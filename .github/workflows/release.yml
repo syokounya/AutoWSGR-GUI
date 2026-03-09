@@ -1,17 +1,16 @@
 name: Build & Release
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
-      version:
-        description: '版本号 (如 0.1.0)'
-        required: true
-        default: '0.1.0'
       prerelease:
         description: '标记为预发布'
         required: false
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: write
@@ -23,6 +22,19 @@ jobs:
       - name: Checkout frontend
         uses: actions/checkout@v4
 
+      - name: Determine version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $ver = "${{ github.ref_name }}" -replace '^v', ''
+          } else {
+            $pkg = Get-Content package.json | ConvertFrom-Json
+            $ver = $pkg.version
+          }
+          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+          echo "Resolved version: $ver"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -32,11 +44,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Update version
+      - name: Sync package.json version
         shell: pwsh
         run: |
           $pkg = Get-Content package.json | ConvertFrom-Json
-          $pkg.version = "${{ github.event.inputs.version }}"
+          $pkg.version = "${{ steps.version.outputs.VERSION }}"
           $pkg | ConvertTo-Json -Depth 10 | Set-Content package.json -Encoding UTF8
 
       - name: Build & Package
@@ -51,15 +63,15 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: AutoWSGR-GUI v${{ github.event.inputs.version }}
-          prerelease: ${{ github.event.inputs.prerelease }}
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: AutoWSGR-GUI v${{ steps.version.outputs.VERSION }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
           generate_release_notes: true
           files: |
             release/*.exe
             release/*.zip
           body: |
-            ## AutoWSGR-GUI v${{ github.event.inputs.version }}
+            ## AutoWSGR-GUI v${{ steps.version.outputs.VERSION }}
 
             ### 使用方法
             1. 下载 `AutoWSGR-GUI-*-portable.exe`（免安装版）或 `AutoWSGR-GUI-*-Setup.exe`（安装版）

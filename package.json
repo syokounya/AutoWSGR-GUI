@@ -70,21 +70,10 @@
       "icon": "resource/images/logo.png",
       "target": [
         {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
           "target": "portable",
           "arch": ["x64"]
         }
       ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "runAfterFinish": true,
-      "include": "build/installer.nsh"
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.exe"

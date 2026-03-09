@@ -801,6 +801,16 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
   const allReady = missingPackages.length === 0;
   if (allReady) {
     sendProgress('依赖检查通过 ✓');
+
+    // 检查 ADB 可用性
+    const adbDir = path.join(appRoot(), 'adb');
+    const builtinAdb = path.join(adbDir, 'adb.exe');
+    if (fs.existsSync(builtinAdb)) {
+      sendProgress('ADB (内置) ✓');
+    } else {
+      sendProgress('ADB (内置) ✗  将使用模拟器自带 ADB');
+    }
+
     // 检查并自动更新 autowsgr
     const updatedVer = await autoUpdateAutowsgr(pythonCmd);
     const finalVer = updatedVer || autowsgrVersion;
@@ -1039,6 +1049,11 @@ async function startBackend(): Promise<void> {
     `uvicorn.run('autowsgr.server.main:app', host='127.0.0.1', port=8000)`,
   ].join('; ');
 
+  // 将内置 ADB 目录加入 PATH，使后端 shutil.which('adb') 能找到
+  const adbDir = path.join(appRoot(), 'adb');
+  const envPath = process.env.PATH || '';
+  const pathWithAdb = fs.existsSync(adbDir) ? `${adbDir};${envPath}` : envPath;
+
   backendProcess = spawn(pythonCmd, [
     '-X', 'utf8',
     '-c', bootstrap,
@@ -1050,6 +1065,7 @@ async function startBackend(): Promise<void> {
       ...process.env,
       PYTHONUTF8: '1',
       PYTHONIOENCODING: 'utf-8',
+      PATH: pathWithAdb,
     },
   });
 

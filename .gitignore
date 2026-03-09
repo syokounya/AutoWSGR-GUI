@@ -35,6 +35,7 @@ _setup_tmp/
 node/
 python/
 redist/
+adb/
 
 # 测试用地图
 resource/maps/99-1.json

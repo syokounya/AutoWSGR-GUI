@@ -8,8 +8,9 @@
     "start": "chcp 65001 >nul && npm run build && electron .",
     "dev": "chcp 65001 >nul && tsc && node scripts/bundle.js && electron .",
     "prepare-python": "node scripts/prepare-python.js",
+    "prepare-adb": "node scripts/prepare-adb.js",
     "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run prepare-python && npm run build && electron-builder"
+    "dist": "npm run prepare-python && npm run prepare-adb && npm run build && electron-builder"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
@@ -63,6 +64,11 @@
       {
         "from": "redist",
         "to": "redist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "adb",
+        "to": "adb",
         "filter": ["**/*"]
       }
     ],

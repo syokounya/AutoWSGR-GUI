@@ -126,14 +126,16 @@
     <section id="page-plan" class="page">
       <div class="plan-page-layout">
         <div class="plan-page-main">
-          <div id="plan-empty" class="empty-state">
-            <p>尚未导入方案</p>
-            <div class="empty-state-actions">
-              <button class="btn btn-primary" id="btn-import-plan-2">选择 yaml 文件</button>
-              <button class="btn" id="btn-new-plan">新建方案</button>
+          <div id="plan-empty" class="card plan-empty-card">
+            <div class="empty-state">
+              <p>尚未导入方案</p>
+              <div class="empty-state-actions">
+                <button class="btn btn-primary" id="btn-import-plan-2">选择 yaml 文件</button>
+                <button class="btn" id="btn-new-plan">新建方案</button>
+              </div>
+              <p class="plans-dir-hint">内置方案目录：<span id="plans-dir-hint" class="hint-path">加载中…</span></p>
+              <button class="btn btn-small btn-link" id="btn-open-plans-dir">打开方案文件夹</button>
             </div>
-            <p class="plans-dir-hint">内置方案目录：<span id="plans-dir-hint" class="hint-path">加载中…</span></p>
-            <button class="btn btn-small btn-link" id="btn-open-plans-dir">打开方案文件夹</button>
           </div>
 
       <!-- 新建方案：选择地图对话框 -->
@@ -170,6 +172,114 @@
             <button class="btn btn-primary" id="btn-new-plan-confirm">确定</button>
             <button class="btn" id="btn-new-plan-cancel">取消</button>
           </div>
+        </div>
+      </div>
+
+      <!-- ═══ 任务预设详情面板 ═══ -->
+      <div id="task-preset-detail" class="card task-preset-panel" style="display:none">
+        <div class="task-preset-header">
+          <h2 id="tp-name"></h2>
+          <button class="btn btn-small btn-close-plan" id="btn-close-preset" title="关闭">✕</button>
+        </div>
+        <span class="badge" id="tp-type-badge"></span>
+
+        <!-- 演习配置 -->
+        <div id="tp-cfg-exercise" class="tp-cfg" style="display:none">
+          <div class="form-group">
+            <label>演习舰队</label>
+            <select id="tp-exercise-fleet" class="input">
+              <option value="1">第 1 舰队</option>
+              <option value="2">第 2 舰队</option>
+              <option value="3">第 3 舰队</option>
+              <option value="4">第 4 舰队</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label><input type="checkbox" id="tp-fleet-enable-ex"> 设置编队舰船</label>
+            <div class="fleet-grid" id="tp-fleet-grid-ex" style="display:none">
+              <div class="fleet-row"><span class="fleet-pos">1</span><input type="text" class="input fleet-ship tp-ship-ex" placeholder="舰船名称"></div>
+              <div class="fleet-row"><span class="fleet-pos">2</span><input type="text" class="input fleet-ship tp-ship-ex" placeholder="舰船名称"></div>
+              <div class="fleet-row"><span class="fleet-pos">3</span><input type="text" class="input fleet-ship tp-ship-ex" placeholder="舰船名称"></div>
+              <div class="fleet-row"><span class="fleet-pos">4</span><input type="text" class="input fleet-ship tp-ship-ex" placeholder="舰船名称"></div>
+              <div class="fleet-row"><span class="fleet-pos">5</span><input type="text" class="input fleet-ship tp-ship-ex" placeholder="舰船名称"></div>
+              <div class="fleet-row"><span class="fleet-pos">6</span><input type="text" class="input fleet-ship tp-ship-ex" placeholder="舰船名称"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 战役配置 -->
+        <div id="tp-cfg-campaign" class="tp-cfg" style="display:none">
+          <div class="form-group">
+            <label>战役类型</label>
+            <select id="tp-campaign-name" class="input">
+              <option value="困难潜艇">困难潜艇</option>
+              <option value="困难航母">困难航母</option>
+              <option value="困难驱逐">困难驱逐</option>
+              <option value="困难巡洋">困难巡洋</option>
+              <option value="困难战列">困难战列</option>
+              <option value="简单航母">简单航母</option>
+              <option value="简单潜艇">简单潜艇</option>
+              <option value="简单驱逐">简单驱逐</option>
+              <option value="简单巡洋">简单巡洋</option>
+              <option value="简单战列">简单战列</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 决战配置 -->
+        <div id="tp-cfg-decisive" class="tp-cfg" style="display:none">
+          <div class="form-group">
+            <label>决战章节</label>
+            <select id="tp-decisive-chapter" class="input">
+              <option value="1">第 1 章</option>
+              <option value="2">第 2 章</option>
+              <option value="3">第 3 章</option>
+              <option value="4">第 4 章</option>
+              <option value="5">第 5 章</option>
+              <option value="6">第 6 章</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>level1 舰船（每行一个）</label>
+            <textarea id="tp-decisive-level1" class="input" rows="4" placeholder="每行一个舰船名称"></textarea>
+          </div>
+          <div class="form-group">
+            <label>level2 舰船（每行一个）</label>
+            <textarea id="tp-decisive-level2" class="input" rows="3" placeholder="每行一个舰船名称"></textarea>
+          </div>
+          <div class="form-group">
+            <label>旗舰优先级（每行一个）</label>
+            <textarea id="tp-decisive-flagship" class="input" rows="2" placeholder="每行一个舰船名称"></textarea>
+          </div>
+        </div>
+
+        <!-- 常规出击/活动出击配置 -->
+        <div id="tp-cfg-fight" class="tp-cfg" style="display:none">
+          <div class="form-group">
+            <label>方案文件</label>
+            <input type="text" id="tp-fight-plan" class="input" readonly>
+          </div>
+          <div class="form-group">
+            <label>编队</label>
+            <select id="tp-fight-fleet" class="input">
+              <option value="1">第 1 舰队</option>
+              <option value="2">第 2 舰队</option>
+              <option value="3">第 3 舰队</option>
+              <option value="4">第 4 舰队</option>
+            </select>
+          </div>
+        </div>
+
+        <hr class="card-divider">
+
+        <div class="form-group" id="tp-times-group">
+          <label>执行次数</label>
+          <input type="number" id="tp-times" class="input" min="1" max="99" value="1">
+        </div>
+
+        <div class="plan-actions" style="margin-top:12px">
+          <button class="btn btn-primary btn-small" id="btn-tp-add-queue">加入队列</button>
+          <button class="btn btn-small" id="btn-tp-add-group">加入任务组</button>
         </div>
       </div>
 
@@ -270,7 +380,10 @@
         <div class="card template-library-card" id="template-library-card">
           <div class="template-library-header">
             <h3>模板库</h3>
-            <button class="btn btn-small btn-primary" id="btn-create-template">创建模板</button>
+            <div class="template-library-actions">
+              <button class="btn btn-small" id="btn-import-template" title="从 JSON 文件导入模板">导入</button>
+              <button class="btn btn-small btn-primary" id="btn-create-template">创建模板</button>
+            </div>
           </div>
           <div class="template-library-items" id="template-library-items">
             <p class="tpl-empty">暂无模板，点击「创建模板」添加</p>
@@ -289,6 +402,10 @@
         </div>
       </div>
       <div class="config-grid">
+
+      <!-- ═══ 左列：基础设置 ═══ -->
+      <div class="config-col-left">
+
       <div class="card">
         <h3>模拟器配置</h3>
         <div class="form-group">
@@ -308,7 +425,10 @@
         </div>
         <div class="form-group">
           <label>ADB 端口 (serial)</label>
-          <input type="text" id="cfg-emu-serial" class="input" placeholder="如 127.0.0.1:16384，留空自动检测">
+          <div class="input-row">
+            <input type="text" id="cfg-emu-serial" class="input" placeholder="如 127.0.0.1:16384，留空自动检测">
+            <button class="btn btn-small" id="btn-check-adb">检测 ADB</button>
+          </div>
         </div>
       </div>
 
@@ -320,57 +440,6 @@
             <option value="官服">官服</option>
             <option value="小米服">小米服</option>
             <option value="应用宝服">应用宝服</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>日常自动化</h3>
-        <div class="form-group">
-          <label><input type="checkbox" id="cfg-auto-expedition" checked> 自动远征</label>
-        </div>
-        <div class="form-group">
-          <label>远征检查间隔（分钟）</label>
-          <input type="number" id="cfg-expedition-interval" class="input" min="1" max="120" value="15">
-        </div>
-
-        <hr class="card-divider">
-
-        <div class="form-group">
-          <label><input type="checkbox" id="cfg-auto-battle"> 自动战役</label>
-        </div>
-        <div class="form-group">
-          <label>战役类型</label>
-          <select id="cfg-battle-type" class="input">
-            <option value="困难潜艇">困难潜艇</option>
-            <option value="困难航母">困难航母</option>
-            <option value="困难驱逐">困难驱逐</option>
-            <option value="困难巡洋">困难巡洋</option>
-            <option value="困难战列">困难战列</option>
-            <option value="简单航母">简单航母</option>
-            <option value="简单潜艇">简单潜艇</option>
-            <option value="简单驱逐">简单驱逐</option>
-            <option value="简单巡洋">简单巡洋</option>
-            <option value="简单战列">简单战列</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>战役次数</label>
-          <input type="number" id="cfg-battle-times" class="input" min="1" max="10" value="3">
-        </div>
-
-        <hr class="card-divider">
-
-        <div class="form-group">
-          <label><input type="checkbox" id="cfg-auto-exercise"> 自动演习</label>
-        </div>
-        <div class="form-group">
-          <label>演习舰队</label>
-          <select id="cfg-exercise-fleet" class="input">
-            <option value="1">第 1 舰队</option>
-            <option value="2">第 2 舰队</option>
-            <option value="3">第 3 舰队</option>
-            <option value="4">第 4 舰队</option>
           </select>
         </div>
       </div>
@@ -400,6 +469,101 @@
           <label><input type="checkbox" id="cfg-debug-mode"> 调试模式（显示全部日志）</label>
         </div>
       </div>
+
+      </div><!-- /config-col-left -->
+
+      <!-- ═══ 右列：自动化设置 ═══ -->
+      <div class="config-col-right">
+
+      <div class="card">
+        <h3>自动化设置</h3>
+        <p class="config-hint">勾选启用的自动化任务。后端启动后将按照配置自动执行对应任务。具体任务参数可在模板中进一步自定义。</p>
+
+        <div class="auto-grid">
+
+        <!-- 远征 -->
+        <div class="auto-section">
+          <div class="auto-section-header">
+            <label class="auto-toggle"><input type="checkbox" id="cfg-auto-expedition" checked> 自动远征</label>
+          </div>
+          <div class="auto-section-body">
+            <div class="form-group">
+              <label>远征检查间隔（分钟）</label>
+              <input type="number" id="cfg-expedition-interval" class="input" min="1" max="120" value="15">
+            </div>
+          </div>
+        </div>
+
+        <!-- 战役 -->
+        <div class="auto-section">
+          <div class="auto-section-header">
+            <label class="auto-toggle"><input type="checkbox" id="cfg-auto-battle"> 自动战役</label>
+          </div>
+          <div class="auto-section-body">
+            <div class="form-group">
+              <label>战役类型</label>
+              <select id="cfg-battle-type" class="input">
+                <option value="困难潜艇">困难潜艇</option>
+                <option value="困难航母">困难航母</option>
+                <option value="困难驱逐">困难驱逐</option>
+                <option value="困难巡洋">困难巡洋</option>
+                <option value="困难战列">困难战列</option>
+                <option value="简单航母">简单航母</option>
+                <option value="简单潜艇">简单潜艇</option>
+                <option value="简单驱逐">简单驱逐</option>
+                <option value="简单巡洋">简单巡洋</option>
+                <option value="简单战列">简单战列</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>战役次数</label>
+              <input type="number" id="cfg-battle-times" class="input" min="1" max="10" value="3">
+            </div>
+          </div>
+        </div>
+
+        <!-- 演习 -->
+        <div class="auto-section">
+          <div class="auto-section-header">
+            <label class="auto-toggle"><input type="checkbox" id="cfg-auto-exercise"> 自动演习</label>
+          </div>
+          <div class="auto-section-body">
+            <div class="form-group">
+              <label>演习舰队</label>
+              <select id="cfg-exercise-fleet" class="input">
+                <option value="1">第 1 舰队</option>
+                <option value="2">第 2 舰队</option>
+                <option value="3">第 3 舰队</option>
+                <option value="4">第 4 舰队</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 常规出击 -->
+        <div class="auto-section">
+          <div class="auto-section-header">
+            <label class="auto-toggle"><input type="checkbox" id="cfg-auto-normal-fight"> 自动常规出击</label>
+          </div>
+          <div class="auto-section-body">
+            <p class="config-hint">按模板库中的出击方案自动执行。</p>
+          </div>
+        </div>
+
+        <!-- 决战 -->
+        <div class="auto-section">
+          <div class="auto-section-header">
+            <label class="auto-toggle"><input type="checkbox" id="cfg-auto-decisive"> 自动决战</label>
+          </div>
+          <div class="auto-section-body">
+            <p class="config-hint">按模板库中的决战配置自动执行。</p>
+          </div>
+        </div>
+
+        </div><!-- /auto-grid -->
+      </div>
+
+      </div><!-- /config-col-right -->
 
       </div>
     </section>

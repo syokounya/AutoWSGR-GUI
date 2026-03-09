@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('electronBridge', {
     return ipcRenderer.invoke('detect-emulator');
   },
 
+  checkAdbDevices: () => {
+    return ipcRenderer.invoke('check-adb-devices');
+  },
+
   getAppRoot: () => {
     return ipcRenderer.invoke('get-app-root');
   },

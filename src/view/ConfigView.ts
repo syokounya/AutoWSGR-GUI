@@ -16,6 +16,8 @@ export class ConfigView {
   private autoExercise: HTMLInputElement;
   private exerciseFleetId: HTMLSelectElement;
   private battleTimes: HTMLInputElement;
+  private autoNormalFight: HTMLInputElement;
+  private autoDecisive: HTMLInputElement;
   private themeMode: HTMLSelectElement;
   private accentColor: HTMLInputElement;
   private accentLabel: HTMLElement;
@@ -33,6 +35,8 @@ export class ConfigView {
     this.autoExercise = document.getElementById('cfg-auto-exercise') as HTMLInputElement;
     this.exerciseFleetId = document.getElementById('cfg-exercise-fleet') as HTMLSelectElement;
     this.battleTimes = document.getElementById('cfg-battle-times') as HTMLInputElement;
+    this.autoNormalFight = document.getElementById('cfg-auto-normal-fight') as HTMLInputElement;
+    this.autoDecisive = document.getElementById('cfg-auto-decisive') as HTMLInputElement;
     this.themeMode = document.getElementById('cfg-theme-mode') as HTMLSelectElement;
     this.accentColor = document.getElementById('cfg-accent-color') as HTMLInputElement;
     this.accentLabel = document.getElementById('cfg-accent-label')!;
@@ -57,6 +61,8 @@ export class ConfigView {
     this.autoExercise.checked = vo.autoExercise;
     this.exerciseFleetId.value = String(vo.exerciseFleetId);
     this.battleTimes.value = String(vo.battleTimes);
+    this.autoNormalFight.checked = vo.autoNormalFight;
+    this.autoDecisive.checked = vo.autoDecisive;
     this.themeMode.value = vo.themeMode;
     this.accentColor.value = vo.accentColor;
     this.accentLabel.textContent = vo.accentColor;
@@ -77,6 +83,8 @@ export class ConfigView {
       autoExercise: this.autoExercise.checked,
       exerciseFleetId: Number(this.exerciseFleetId.value) || 1,
       battleTimes: Number(this.battleTimes.value) || 3,
+      autoNormalFight: this.autoNormalFight.checked,
+      autoDecisive: this.autoDecisive.checked,
       themeMode: this.themeMode.value as 'dark' | 'light' | 'system',
       accentColor: this.accentColor.value,
       debugMode: this.debugMode.checked,

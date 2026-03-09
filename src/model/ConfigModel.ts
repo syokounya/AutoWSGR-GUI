@@ -20,6 +20,8 @@ const DEFAULT_SETTINGS: UserSettings = {
     battle_times: 3,
     auto_exercise: false,
     exercise_fleet_id: 1,
+    auto_normal_fight: false,
+    auto_decisive: false,
   },
 };
 

@@ -1,6 +1,6 @@
 import type { TaskTemplate } from './types';
 
-const FILE_PATH = 'templates.json';
+const FILE_PATH = 'templates/templates.json';
 
 let idCounter = 0;
 function generateId(): string {
@@ -63,6 +63,25 @@ export class TemplateModel {
     }
   }
 
+  /** 从 JSON 数组导入模板，自动分配新 id */
+  async importFromJson(raw: unknown[]): Promise<number> {
+    let count = 0;
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue;
+      const rec = item as Record<string, unknown>;
+      if (!rec.name || !rec.type) continue;
+      const tpl: TaskTemplate = {
+        ...(rec as any),
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+      };
+      this.templates.push(tpl);
+      count++;
+    }
+    if (count > 0) await this.save();
+    return count;
+  }
+
   /** 持久化到本地文件 templates.json */
   private async save(): Promise<void> {
     if (!this.io) return;
@@ -76,7 +95,16 @@ export class TemplateModel {
       const raw = await this.io.readFile(FILE_PATH);
       if (raw) {
         this.templates = JSON.parse(raw);
+        return;
       }
-    } catch { /* 文件不存在或数据损坏，使用空列表 */ }
+    } catch { /* 文件不存在 */ }
+    // 迁移：尝试从旧路径 templates.json 加载
+    try {
+      const raw = await this.io.readFile('templates.json');
+      if (raw) {
+        this.templates = JSON.parse(raw);
+        await this.save(); // 保存到新路径
+      }
+    } catch { /* 旧文件也不存在，使用空列表 */ }
   }
 }

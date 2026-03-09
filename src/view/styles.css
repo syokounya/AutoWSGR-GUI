@@ -953,8 +953,8 @@ body {
 }
 
 .btn-small {
-  padding: 5px 14px;
-  font-size: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
 }
 
 .btn-danger {
@@ -1538,13 +1538,32 @@ select.input {
   overflow: hidden;
 }
 
-.plan-page-main .empty-state {
+.plan-empty-card {
   flex: 1;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
 }
+
+.plan-empty-card .empty-state {
+  flex: none;
+}
+
+/* ═══ 任务预设详情面板 ═══ */
+.task-preset-panel {
+  flex: 1;
+  max-width: 100%;
+  padding: 24px 32px;
+  overflow-y: auto;
+}
+.task-preset-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.task-preset-header h2 { margin: 0; }
+.tp-cfg { margin-top: 12px; }
 
 /* ═══ 方案预览双栏布局 ═══ */
 .plan-layout {
@@ -1715,8 +1734,26 @@ input[type="checkbox"]:focus-visible {
 
 .config-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.config-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.config-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.config-col-right > .card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .config-grid .card {
@@ -1734,6 +1771,56 @@ input[type="checkbox"]:focus-visible {
 
 .config-grid .form-group:last-child {
   margin-bottom: 0;
+}
+
+/* 自动化分区 */
+.auto-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 20px;
+  flex: 1;
+  align-content: start;
+}
+
+.auto-section {
+  margin-bottom: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.auto-section-header {
+  margin-bottom: 8px;
+}
+
+.auto-toggle {
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.auto-toggle input[type="checkbox"] {
+  margin-right: 6px;
+}
+
+.auto-section-body {
+  padding-left: 4px;
+}
+
+.auto-section-body .form-group {
+  margin-bottom: 8px;
+}
+
+.auto-section-body .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.config-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 8px 0;
+  line-height: 1.5;
 }
 
 /* ═══ 队列操作栏 ═══ */
@@ -1971,6 +2058,10 @@ input[type="checkbox"]:focus-visible {
 }
 .template-library-header h3 {
   margin: 0;
+}
+.template-library-actions {
+  display: flex;
+  gap: 6px;
 }
 .template-library-items {
   overflow-y: auto;

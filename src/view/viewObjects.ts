@@ -112,6 +112,8 @@ export interface ConfigViewObject {
   autoExercise: boolean;
   exerciseFleetId: number;
   battleTimes: number;
+  autoNormalFight: boolean;
+  autoDecisive: boolean;
   themeMode: 'dark' | 'light' | 'system';
   accentColor: string;
   debugMode: boolean;

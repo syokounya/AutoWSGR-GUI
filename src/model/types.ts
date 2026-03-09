@@ -62,6 +62,8 @@ export interface DailyAutomation {
   battle_times: number;
   auto_exercise: boolean;
   exercise_fleet_id: number;
+  auto_normal_fight: boolean;
+  auto_decisive: boolean;
 }
 
 export interface UserSettings {

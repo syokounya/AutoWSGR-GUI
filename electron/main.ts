@@ -134,6 +134,7 @@ ipcMain.handle('save-file-dialog', async (_event, defaultName: string, content: 
 
 ipcMain.handle('read-file', async (_event, filePath: string) => {
   const resolved = resolveAppPath(filePath);
+  if (!fs.existsSync(resolved)) return '';
   return fs.readFileSync(resolved, 'utf-8');
 });
 
@@ -252,6 +253,25 @@ function detectEmulator(): EmulatorDetectResult | null {
 
 ipcMain.handle('detect-emulator', async () => {
   return detectEmulator();
+});
+
+ipcMain.handle('check-adb-devices', async () => {
+  const adbDir = path.join(appRoot(), 'adb');
+  const adbExe = path.join(adbDir, 'adb.exe');
+  const adbCmd = fs.existsSync(adbExe) ? adbExe : 'adb';
+  try {
+    const { stdout } = await execAsync(`"${adbCmd}" devices`, { windowsHide: true, timeout: 5000 });
+    const lines = stdout.split('\n').slice(1); // skip header
+    return lines
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+      .map(l => {
+        const [serial, status] = l.split(/\s+/);
+        return { serial, status: status || 'unknown' };
+      });
+  } catch {
+    return [];
+  }
 });
 
 ipcMain.handle('get-app-root', () => {
@@ -1062,6 +1082,24 @@ async function startBackend(): Promise<void> {
   const adbDir = path.join(appRoot(), 'adb');
   const envPath = process.env.PATH || '';
   const pathWithAdb = fs.existsSync(adbDir) ? `${adbDir};${envPath}` : envPath;
+
+  // 预连接 ADB 设备（MuMu 多开实例不会自动被 ADB 发现，需要主动 connect）
+  try {
+    const cfgPath = path.join(appRoot(), 'usersettings.yaml');
+    if (fs.existsSync(cfgPath)) {
+      const cfgText = fs.readFileSync(cfgPath, 'utf-8');
+      const serialMatch = cfgText.match(/serial:\s*(\S+)/);
+      if (serialMatch) {
+        const serial = serialMatch[1];
+        const adbExe = path.join(adbDir, 'adb.exe');
+        const adbCmd = fs.existsSync(adbExe) ? adbExe : 'adb';
+        execSync(`"${adbCmd}" connect ${serial}`, { windowsHide: true, timeout: 5000, stdio: 'pipe' });
+        console.log(`[Backend] ADB connect ${serial} 完成`);
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[Backend] ADB connect 失败 (非致命): ${e.message}`);
+  }
 
   backendProcess = spawn(pythonCmd, [
     '-X', 'utf8',

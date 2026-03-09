@@ -63,6 +63,7 @@ interface ElectronBridge {
   saveFileDialog: (defaultName: string, content: string, filters: { name: string; extensions: string[] }[]) => Promise<string | null>;
   readFile: (path: string) => Promise<string>;
   detectEmulator: () => Promise<{ type: string; path: string; serial: string; adbPath: string } | null>;
+  checkAdbDevices: () => Promise<{ serial: string; status: string }[]>;
   getAppRoot: () => Promise<string>;
   getPlansDir: () => Promise<string>;
   getConfigDir: () => Promise<string>;
@@ -136,6 +137,8 @@ export class AppController {
   private configDir = '';
   private editingNodeId: string | null = null;
   private wizardStep = 1;
+  private currentPreset: TaskPreset | null = null;
+  private currentPresetFilePath = '';
 
   constructor() {
     this.mainView = new MainView();
@@ -524,6 +527,41 @@ export class AppController {
       }
     });
 
+    // ADB 设备检测按钮
+    document.getElementById('btn-check-adb')?.addEventListener('click', async () => {
+      const bridge = window.electronBridge;
+      if (!bridge?.checkAdbDevices) return;
+      const btn = document.getElementById('btn-check-adb') as HTMLButtonElement;
+      btn.disabled = true;
+      btn.textContent = '检测中…';
+      try {
+        const devices = await bridge.checkAdbDevices();
+        const online = devices.filter(d => d.status === 'device');
+        if (online.length === 0) {
+          await this.showAlert('ADB 检测', '未发现在线设备。\n请确认模拟器已启动。');
+        } else {
+          const list = online.map(d => d.serial).join('\n');
+          const msg = `发现 ${online.length} 个在线设备：\n\n${list}\n\n是否将第一个设备填入 serial？`;
+          if (online.length === 1) {
+            // 只有一个设备，直接填入
+            (document.getElementById('cfg-emu-serial') as HTMLInputElement).value = online[0].serial;
+            this.appendLocalLog('info', `ADB 检测到在线设备: ${online[0].serial}，已自动填入`);
+          } else {
+            // 多个设备，让用户确认
+            const ok = await this.showConfirm('ADB 检测', msg);
+            if (ok) {
+              (document.getElementById('cfg-emu-serial') as HTMLInputElement).value = online[0].serial;
+            }
+          }
+        }
+      } catch (e: any) {
+        await this.showAlert('ADB 检测失败', e.message || String(e));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '检测 ADB';
+      }
+    });
+
     // 停止当前任务
     document.getElementById('btn-stop-task')?.addEventListener('click', () => this.scheduler.stopCurrentTask());
 
@@ -722,6 +760,15 @@ export class AppController {
 
     // 方案预览页「加入任务组」按钮
     document.getElementById('btn-add-to-group')?.addEventListener('click', () => this.addCurrentPlanToGroup());
+
+    // 任务预设详情面板
+    document.getElementById('btn-close-preset')?.addEventListener('click', () => this.closePresetDetail());
+    document.getElementById('btn-tp-add-queue')?.addEventListener('click', () => this.executePreset());
+    document.getElementById('btn-tp-add-group')?.addEventListener('click', () => this.addPresetToGroup());
+    document.getElementById('tp-fleet-enable-ex')?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      document.getElementById('tp-fleet-grid-ex')!.style.display = checked ? '' : 'none';
+    });
   }
 
   private renderTaskGroup(): void {
@@ -1069,67 +1116,162 @@ export class AppController {
     }
   }
 
-  /** 导入任务预设 YAML 并直接加入调度队列 */
+  /** 导入任务预设 YAML → 打开详情面板，用户手动加入队列 */
   private importTaskPreset(preset: TaskPreset, filePath: string): void {
-    const name = filePath.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? preset.task_type;
-    let req: TaskRequest;
-    const times = preset.times ?? 1;
-
     // 将相对 plan_id 解析为绝对路径 (相对于预设文件所在目录)
-    let resolvedPlanId = preset.plan_id ?? null;
-    if (resolvedPlanId && !/^[A-Za-z]:[/\\]/.test(resolvedPlanId) && !resolvedPlanId.startsWith('/')) {
+    if (preset.plan_id && !/^[A-Za-z]:[/\\]/.test(preset.plan_id) && !preset.plan_id.startsWith('/')) {
       const dir = filePath.replace(/[\\/][^\\/]+$/, '');
-      resolvedPlanId = dir + '\\' + resolvedPlanId.replace(/\//g, '\\');
+      preset.plan_id = dir + '\\' + preset.plan_id.replace(/\//g, '\\');
     }
+    this.showPresetDetail(preset, filePath);
+    this.switchPage('plan');
+  }
+
+  /** 显示任务预设详情面板，隐藏模板库 */
+  private showPresetDetail(preset: TaskPreset, filePath: string): void {
+    this.currentPreset = preset;
+    this.currentPresetFilePath = filePath;
+
+    const name = filePath.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? preset.task_type;
+    const typeLabel = AppController.TEMPLATE_TYPE_LABELS[preset.task_type] ?? preset.task_type;
+
+    // 隐藏空状态 / 方案预览 / 模板库，显示预设面板
+    const emptyEl = document.getElementById('plan-empty');
+    const detailEl = document.getElementById('plan-detail');
+    const tplCard = document.getElementById('template-library-card');
+    const presetEl = document.getElementById('task-preset-detail');
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (detailEl) detailEl.style.display = 'none';
+    if (tplCard) tplCard.style.display = 'none';
+    if (presetEl) presetEl.style.display = '';
+
+    document.getElementById('tp-name')!.textContent = name;
+    document.getElementById('tp-type-badge')!.textContent = typeLabel;
+
+    // 隐藏所有类型配置区
+    for (const id of ['tp-cfg-exercise', 'tp-cfg-campaign', 'tp-cfg-decisive', 'tp-cfg-fight']) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    }
+
+    // 根据类型显示 & 预填
+    switch (preset.task_type) {
+      case 'exercise': {
+        document.getElementById('tp-cfg-exercise')!.style.display = '';
+        (document.getElementById('tp-exercise-fleet') as HTMLSelectElement).value = String(preset.fleet_id ?? 1);
+        // 重置编队
+        const cb = document.getElementById('tp-fleet-enable-ex') as HTMLInputElement;
+        cb.checked = false;
+        document.getElementById('tp-fleet-grid-ex')!.style.display = 'none';
+        document.querySelectorAll<HTMLInputElement>('.tp-ship-ex').forEach(inp => { inp.value = ''; });
+        break;
+      }
+      case 'campaign':
+        document.getElementById('tp-cfg-campaign')!.style.display = '';
+        (document.getElementById('tp-campaign-name') as HTMLSelectElement).value = preset.campaign_name ?? '困难潜艇';
+        break;
+      case 'decisive': {
+        document.getElementById('tp-cfg-decisive')!.style.display = '';
+        (document.getElementById('tp-decisive-chapter') as HTMLSelectElement).value = String(preset.chapter ?? 6);
+        (document.getElementById('tp-decisive-level1') as HTMLTextAreaElement).value = (preset.level1 ?? []).join('\n');
+        (document.getElementById('tp-decisive-level2') as HTMLTextAreaElement).value = (preset.level2 ?? []).join('\n');
+        (document.getElementById('tp-decisive-flagship') as HTMLTextAreaElement).value = (preset.flagship_priority ?? []).join('\n');
+        break;
+      }
+      case 'normal_fight':
+      case 'event_fight':
+        document.getElementById('tp-cfg-fight')!.style.display = '';
+        (document.getElementById('tp-fight-plan') as HTMLInputElement).value = preset.plan_id ?? '';
+        (document.getElementById('tp-fight-fleet') as HTMLSelectElement).value = String(preset.fleet_id ?? 1);
+        break;
+    }
+
+    // 公共字段
+    const timesGroup = document.getElementById('tp-times-group')!;
+    const timesEl = document.getElementById('tp-times') as HTMLInputElement;
+    if (preset.task_type === 'exercise' || preset.task_type === 'campaign') {
+      // 演习：打完所有已刷新演习；战役：配置页已有自动战役设置
+      timesGroup.style.display = 'none';
+    } else {
+      timesGroup.style.display = '';
+      timesEl.value = String(preset.times ?? 1);
+      timesEl.disabled = preset.task_type === 'decisive';
+    }
+  }
+
+  /** 关闭预设详情面板，恢复模板库显示 */
+  private closePresetDetail(): void {
+    this.currentPreset = null;
+    this.currentPresetFilePath = '';
+
+    const presetEl = document.getElementById('task-preset-detail');
+    const emptyEl = document.getElementById('plan-empty');
+    const tplCard = document.getElementById('template-library-card');
+    if (presetEl) presetEl.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = '';
+    if (tplCard) tplCard.style.display = '';
+  }
+
+  /** 从预设详情面板收集表单值，构建任务加入队列 */
+  private executePreset(): void {
+    const preset = this.currentPreset;
+    if (!preset) return;
+
+    const name = this.currentPresetFilePath.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? preset.task_type;
+    let req: TaskRequest;
+    const times = Math.max(1, parseInt((document.getElementById('tp-times') as HTMLInputElement).value, 10) || 1);
 
     switch (preset.task_type) {
       case 'exercise':
-        req = { type: 'exercise', fleet_id: preset.fleet_id ?? 1 };
-        break;
-      case 'campaign':
-        req = { type: 'campaign', campaign_name: preset.campaign_name ?? '困难潜艇', times };
-        break;
-      case 'decisive':
         req = {
-          type: 'decisive',
-          chapter: preset.chapter ?? 6,
-          level1: preset.level1 ?? [],
-          level2: preset.level2 ?? [],
-          flagship_priority: preset.flagship_priority ?? [],
+          type: 'exercise',
+          fleet_id: parseInt((document.getElementById('tp-exercise-fleet') as HTMLSelectElement).value),
         };
         break;
+      case 'campaign':
+        req = {
+          type: 'campaign',
+          campaign_name: (document.getElementById('tp-campaign-name') as HTMLSelectElement).value,
+        };
+        break;
+      case 'decisive': {
+        const parseLines = (id: string) =>
+          (document.getElementById(id) as HTMLTextAreaElement).value.split('\n').map(s => s.trim()).filter(Boolean);
+        req = {
+          type: 'decisive',
+          chapter: parseInt((document.getElementById('tp-decisive-chapter') as HTMLSelectElement).value),
+          level1: parseLines('tp-decisive-level1'),
+          level2: parseLines('tp-decisive-level2'),
+          flagship_priority: parseLines('tp-decisive-flagship'),
+        };
+        break;
+      }
       case 'event_fight':
         req = {
           type: 'event_fight',
-          plan_id: resolvedPlanId,
+          plan_id: (document.getElementById('tp-fight-plan') as HTMLInputElement).value || null,
           times: 1,
           gap: preset.gap ?? 0,
-          fleet_id: preset.fleet_id ?? null,
+          fleet_id: parseInt((document.getElementById('tp-fight-fleet') as HTMLSelectElement).value) || null,
         };
         break;
       case 'normal_fight':
       default:
         req = {
           type: 'normal_fight',
-          plan_id: resolvedPlanId,
+          plan_id: (document.getElementById('tp-fight-plan') as HTMLInputElement).value || null,
           times: 1,
           gap: preset.gap ?? 0,
         };
         break;
     }
 
-    const effectiveTimes = preset.task_type === 'exercise' || preset.task_type === 'decisive' ? 1 : times;
+    const effectiveTimes = (preset.task_type === 'exercise' || preset.task_type === 'decisive' || preset.task_type === 'campaign') ? 1 : times;
     const stopCondition = preset.stop_condition;
 
-    this.scheduler.addTask(
-      name,
-      preset.task_type,
-      req,
-      TaskPriority.USER_TASK,
-      effectiveTimes,
-      stopCondition,
-    );
+    this.scheduler.addTask(name, preset.task_type, req, TaskPriority.USER_TASK, effectiveTimes, stopCondition);
 
+    this.closePresetDetail();
     this.switchPage('main');
     this.renderMain();
 
@@ -1138,6 +1280,32 @@ export class AppController {
     if (stopCondition?.loot_count_ge) parts.push(`战利品≥${stopCondition.loot_count_ge}时停止`);
     if (stopCondition?.ship_count_ge) parts.push(`舰船≥${stopCondition.ship_count_ge}时停止`);
     this.appendLocalLog('info', `任务「${name}」已加入队列${parts.length ? ' (' + parts.join(', ') + ')' : ''}`);
+  }
+
+  /** 将当前预设加入任务组 */
+  private addPresetToGroup(): void {
+    if (!this.currentPreset || !this.currentPresetFilePath) {
+      this.appendLocalLog('warn', '没有已加载的任务预设');
+      return;
+    }
+    let group = this.taskGroupModel.getActiveGroup();
+    if (!group) {
+      this.taskGroupModel.upsertGroup('默认');
+      this.taskGroupModel.setActiveGroup('默认');
+      group = this.taskGroupModel.getActiveGroup()!;
+    }
+    const times = Math.max(1, parseInt((document.getElementById('tp-times') as HTMLInputElement).value, 10) || 1);
+    const label = this.currentPresetFilePath.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? this.currentPreset.task_type;
+
+    this.taskGroupModel.addItem(group.name, {
+      path: this.currentPresetFilePath,
+      kind: 'preset',
+      times,
+      label,
+    });
+    this.taskGroupModel.save();
+    this.renderTaskGroup();
+    this.appendLocalLog('info', `已将「${label} ×${times}」加入任务组「${group.name}」`);
   }
 
   // ════════════════════════════════════════
@@ -1286,6 +1454,12 @@ export class AppController {
     this.editingNodeId = null;
     this.planView.render(null);
     this.planView.hideNodeEditor();
+
+    // 恢复模板库卡片显示
+    const tplCard = document.getElementById('template-library-card');
+    const presetEl = document.getElementById('task-preset-detail');
+    if (tplCard) tplCard.style.display = '';
+    if (presetEl) presetEl.style.display = 'none';
   }
 
   /** 导出当前方案为 YAML 文件 */
@@ -1568,6 +1742,12 @@ export class AppController {
 
     this.planView.render(vo);
 
+    // 显示方案时隐藏模板库卡片和预设面板
+    const tplCard = document.getElementById('template-library-card');
+    const presetEl = document.getElementById('task-preset-detail');
+    if (tplCard) tplCard.style.display = 'none';
+    if (presetEl) presetEl.style.display = 'none';
+
     // 内嵌了 times 的方案：预填次数输入框
     if (plan.data.times != null) {
       const timesInput = document.getElementById('plan-times') as HTMLInputElement;
@@ -1589,6 +1769,8 @@ export class AppController {
       autoExercise: cfg.daily_automation.auto_exercise,
       exerciseFleetId: cfg.daily_automation.exercise_fleet_id,
       battleTimes: cfg.daily_automation.battle_times,
+      autoNormalFight: cfg.daily_automation.auto_normal_fight,
+      autoDecisive: cfg.daily_automation.auto_decisive,
       themeMode: this.getThemeMode(),
       accentColor: this.getAccentColor(),
       debugMode: localStorage.getItem('debugMode') === 'true',
@@ -1621,6 +1803,8 @@ export class AppController {
         auto_exercise: collected.autoExercise,
         exercise_fleet_id: collected.exerciseFleetId,
         battle_times: collected.battleTimes,
+        auto_normal_fight: collected.autoNormalFight,
+        auto_decisive: collected.autoDecisive,
       },
     });
 
@@ -1660,6 +1844,9 @@ export class AppController {
   private bindTemplateActions(): void {
     // 创建模板按钮
     document.getElementById('btn-create-template')?.addEventListener('click', () => this.showWizard());
+
+    // 导入模板按钮
+    document.getElementById('btn-import-template')?.addEventListener('click', () => this.importTemplates());
 
     // 向导：上一步 / 下一步 / 取消
     document.getElementById('btn-wizard-prev')?.addEventListener('click', () => this.wizardNav(-1));
@@ -1733,9 +1920,78 @@ export class AppController {
         grid.querySelectorAll<HTMLInputElement>('.fleet-ship').forEach(inp => inp.value = '');
       }
     }
+    document.getElementById('wizard-title')!.textContent = '创建模板';
     this.updateWizardConfigPanel();
     this.updateWizardUI();
     document.getElementById('template-wizard')!.style.display = 'flex';
+  }
+
+  /** 打开向导并预填模板数据，供用户查看/编辑后保存 */
+  private showWizardWithTemplate(tpl: Record<string, any>): void {
+    // 先走一遍正常的重置
+    this.showWizard();
+    document.getElementById('wizard-title')!.textContent = '导入模板';
+
+    const type = tpl.type as string;
+    // 选中对应类型
+    const radio = document.querySelector(`input[name="tpl-type"][value="${type}"]`) as HTMLInputElement | null;
+    if (radio) radio.checked = true;
+    this.updateWizardConfigPanel();
+
+    // 预填类型专属字段
+    switch (type) {
+      case 'normal_fight': {
+        if (tpl.planPath) (document.getElementById('tpl-plan-path') as HTMLInputElement).value = tpl.planPath;
+        if (tpl.fleet_id) (document.getElementById('tpl-fleet') as HTMLSelectElement).value = String(tpl.fleet_id);
+        if (tpl.fleet?.length) this.fillFleetGrid('nf', tpl.fleet);
+        break;
+      }
+      case 'exercise': {
+        if (tpl.fleet_id) (document.getElementById('tpl-exercise-fleet') as HTMLSelectElement).value = String(tpl.fleet_id);
+        if (tpl.fleet?.length) this.fillFleetGrid('ex', tpl.fleet);
+        break;
+      }
+      case 'campaign': {
+        if (tpl.campaign_name) (document.getElementById('tpl-campaign-type') as HTMLSelectElement).value = tpl.campaign_name;
+        if (tpl.fleet?.length) this.fillFleetGrid('cp', tpl.fleet);
+        break;
+      }
+      case 'decisive': {
+        if (tpl.chapter) (document.getElementById('tpl-decisive-chapter') as HTMLSelectElement).value = String(tpl.chapter);
+        if (tpl.level1?.length) (document.getElementById('tpl-decisive-level1') as HTMLTextAreaElement).value = tpl.level1.join('\n');
+        if (tpl.level2?.length) (document.getElementById('tpl-decisive-level2') as HTMLTextAreaElement).value = tpl.level2.join('\n');
+        if (tpl.flagship_priority?.length) (document.getElementById('tpl-decisive-flagship') as HTMLTextAreaElement).value = tpl.flagship_priority.join('\n');
+        break;
+      }
+    }
+
+    // 预填命名与默认参数
+    if (tpl.name) (document.getElementById('tpl-name') as HTMLInputElement).value = tpl.name;
+    if (tpl.defaultTimes) (document.getElementById('tpl-default-times') as HTMLInputElement).value = String(tpl.defaultTimes);
+    if (tpl.defaultStopCondition?.loot_count_ge > 0) {
+      (document.getElementById('tpl-stop-loot') as HTMLInputElement).value = String(tpl.defaultStopCondition.loot_count_ge);
+    }
+    if (tpl.defaultStopCondition?.ship_count_ge > 0) {
+      (document.getElementById('tpl-stop-ship') as HTMLInputElement).value = String(tpl.defaultStopCondition.ship_count_ge);
+    }
+
+    // 直接跳到步骤2（配置页），让用户审阅
+    this.wizardStep = 2;
+    this.updateWizardUI();
+  }
+
+  /** 预填编队舰船网格 */
+  private fillFleetGrid(suffix: string, ships: string[]): void {
+    const cb = document.getElementById(`tpl-fleet-enable-${suffix}`) as HTMLInputElement | null;
+    const grid = document.getElementById(`tpl-fleet-grid-${suffix}`);
+    if (!cb || !grid) return;
+    // 只有至少一个非空舰船时才勾选
+    if (ships.some(s => s)) {
+      cb.checked = true;
+      grid.style.display = '';
+      const inputs = grid.querySelectorAll<HTMLInputElement>('.fleet-ship');
+      ships.forEach((name, i) => { if (inputs[i]) inputs[i].value = name; });
+    }
   }
 
   private hideWizard(): void {
@@ -2051,6 +2307,40 @@ export class AppController {
     if (!newName?.trim()) return;
     await this.templateModel.rename(id, newName.trim());
     this.renderTemplateLibrary();
+  }
+
+  private async importTemplates(): Promise<void> {
+    const bridge = window.electronBridge;
+    if (!bridge) return;
+    const defaultDir = this.appRoot ? `${this.appRoot}\\templates` : undefined;
+    const result = await bridge.openFileDialog(
+      [{ name: '模板文件', extensions: ['json'] }],
+      defaultDir,
+    );
+    if (!result) return;
+    let arr: unknown[];
+    try {
+      const parsed = JSON.parse(result.content);
+      arr = Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      this.showAlert('导入失败', '文件格式错误，请选择有效的 JSON 模板文件。');
+      return;
+    }
+    // 过滤出有效条目
+    const valid = arr.filter(item => item && typeof item === 'object' && (item as any).name && (item as any).type);
+    if (valid.length === 0) {
+      this.showAlert('导入失败', '未找到有效的模板数据（需包含 name 和 type 字段）。');
+      return;
+    }
+    // 第一个模板打开向导供用户查看/编辑
+    this.showWizardWithTemplate(valid[0] as Record<string, any>);
+    // 其余模板直接加入模板库
+    if (valid.length > 1) {
+      const rest = valid.slice(1);
+      const count = await this.templateModel.importFromJson(rest);
+      this.renderTemplateLibrary();
+      this.appendLocalLog('info', `其余 ${count} 个模板已直接导入`);
+    }
   }
 
   // ── 渲染模板库 ──

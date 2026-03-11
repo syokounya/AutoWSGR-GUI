@@ -138,6 +138,13 @@ ipcMain.handle('read-file', async (_event, filePath: string) => {
   return fs.readFileSync(resolved, 'utf-8');
 });
 
+ipcMain.handle('append-file', async (_event, filePath: string, content: string) => {
+  const resolved = resolveAppPath(filePath);
+  const dir = path.dirname(resolved);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.appendFileSync(resolved, content, 'utf-8');
+});
+
 // ════════════════════════════════════════
 // 模拟器自动检测 (Windows 注册表)
 // ════════════════════════════════════════
@@ -1202,13 +1209,24 @@ async function startBackend(): Promise<void> {
     return `${CYAN}${line}${RESET}`;
   };
 
+  // loguru 新日志行以 "HH:mm:ss.SSS |" 开头
+  const LOGURU_LINE_RE = /^\d{2}:\d{2}:\d{2}\.\d{3}\s*\|/;
+  let skipMultiline = false;
+
   const handleOutput = (data: Buffer) => {
     for (const line of data.toString('utf-8').split('\n')) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       console.log(`${CYAN}[Backend]${RESET} ${colorLine(trimmed)}`);
-      // 只转发关键日志到 GUI (INFO/WARNING/ERROR，跳过 DEBUG 和 uvicorn access log)
-      if (/\bDEBUG\b/i.test(trimmed)) continue;
+
+      const isNewEntry = LOGURU_LINE_RE.test(trimmed);
+      if (isNewEntry) {
+        // 新日志条目：判断级别，决定是否跳过后续续行
+        skipMultiline = /\bDEBUG\b/i.test(trimmed);
+      }
+      // 跳过 DEBUG 级别的日志（包括其多行续行）
+      if (skipMultiline) continue;
+      // 跳过 uvicorn access log
       if (/"(?:GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\s+\//.test(trimmed)) continue;
       mainWindow?.webContents.send('backend-log', trimmed);
     }

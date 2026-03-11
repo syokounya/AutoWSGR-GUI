@@ -6,6 +6,8 @@
 const DEFAULT_BASE_URL = 'http://localhost:8000';
 const WS_RECONNECT_DELAY = 3000;
 
+import { Logger } from '../utils/Logger';
+
 // ════════════════════════════════════════
 // 后端 API 响应类型
 // ════════════════════════════════════════
@@ -28,6 +30,15 @@ export interface TaskProgress {
   node: string | null;
 }
 
+export interface CombatEvent {
+  type: string;
+  node: string | null;
+  action: string | null;
+  result?: unknown;
+  enemies?: Record<string, number>;
+  ship_stats?: number[];
+}
+
 export interface RoundResult {
   round: number;
   success: boolean;
@@ -35,6 +46,9 @@ export interface RoundResult {
   mvp?: string | null;
   ship_damage?: number[];
   grade?: string | null;
+  node_count?: number;
+  enemies?: Record<string, Record<string, number>>;
+  events?: CombatEvent[];
   error?: string;
 }
 
@@ -59,11 +73,71 @@ export interface SystemStatus {
   current_task: string | null;
 }
 
+export interface ShipData {
+  name: string;
+  ship_type: string | null;
+  level: number;
+  health: number;
+  max_health: number;
+  damage_state: number;
+  locked: boolean;
+}
+
+export interface FleetData {
+  fleet_id: number;
+  ships: ShipData[];
+  size: number;
+  has_severely_damaged: boolean;
+}
+
+export interface ExpeditionSlot {
+  chapter: number | null;
+  node: number | null;
+  fleet_id: number | null;
+  is_active: boolean;
+  remaining_seconds: number;
+}
+
+export interface ExpeditionQueueData {
+  slots: ExpeditionSlot[];
+  active_count: number;
+  idle_count: number;
+}
+
+export interface BuildSlotData {
+  occupied: boolean;
+  remaining_seconds: number;
+  is_complete: boolean;
+  is_idle: boolean;
+}
+
+export interface BuildQueueData {
+  slots: BuildSlotData[];
+  idle_count: number;
+  complete_count: number;
+}
+
+export interface ResourcesData {
+  fuel: number;
+  ammo: number;
+  steel: number;
+  aluminum: number;
+  diamond: number;
+  fast_repair: number;
+  fast_build: number;
+  ship_blueprint: number;
+  equipment_blueprint: number;
+}
+
 export interface GameContextData {
   dropped_ship_count: number;
   dropped_loot_count: number;
   quick_repair_used: number;
   current_page: string | null;
+  resources?: ResourcesData;
+  fleets?: FleetData[];
+  expeditions?: ExpeditionQueueData;
+  build_queue?: BuildQueueData;
 }
 
 export interface GameAcquisitionData {
@@ -207,6 +281,7 @@ export class ApiClient {
 
   private async request<T>(method: string, path: string, body?: unknown, timeoutMs?: number): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${path}`;
+    Logger.debug(`HTTP ${method} ${path}${body ? ' body=' + JSON.stringify(body) : ''}`, 'api');
     const init: RequestInit = {
       method,
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -267,6 +342,38 @@ export class ApiClient {
     return this.request('GET', '/api/game/acquisition');
   }
 
+  // ── 操作端点 ──
+
+  async buildCollect(): Promise<ApiResponse> {
+    return this.request('POST', '/api/build/collect');
+  }
+
+  async buildStart(fuel = 30, ammo = 30, steel = 30, bauxite = 30): Promise<ApiResponse> {
+    return this.request('POST', '/api/build/start', { fuel, ammo, steel, bauxite });
+  }
+
+  async rewardCollect(): Promise<ApiResponse> {
+    return this.request('POST', '/api/reward/collect');
+  }
+
+  async cook(position = 1): Promise<ApiResponse> {
+    return this.request('POST', '/api/cook', { position });
+  }
+
+  async repairBath(): Promise<ApiResponse> {
+    return this.request('POST', '/api/repair/bath');
+  }
+
+  async destroy(shipTypes?: string[], removeEquipment = true): Promise<ApiResponse> {
+    return this.request('POST', '/api/destroy', { ship_types: shipTypes ?? null, remove_equipment: removeEquipment });
+  }
+
+  // ── 健康检查 ──
+
+  async health(): Promise<ApiResponse<{ status: string; uptime_seconds: number; emulator_connected: boolean; current_task: unknown }>> {
+    return this.request('GET', '/api/health');
+  }
+
   // ── WebSocket ──
 
   connectWebSockets(): void {
@@ -298,14 +405,18 @@ export class ApiClient {
           if (msg.type === 'log' && this.callbacks.onLog) {
             this.callbacks.onLog(msg as WsLogMessage);
           }
-        } catch { /* ignore malformed */ }
+        } catch {
+          Logger.debug('WS /logs: malformed message', 'api');
+        }
       };
 
       this.wsLog.onopen = () => {
+        Logger.debug('WS /logs connected', 'api');
         this.callbacks.onWsStatusChange?.(true);
       };
 
       this.wsLog.onclose = () => {
+        Logger.debug('WS /logs disconnected, reconnect in 3s', 'api');
         this.callbacks.onWsStatusChange?.(false);
         this.reconnectTimers.log = setTimeout(() => this.connectLogWs(), WS_RECONNECT_DELAY);
       };
@@ -331,10 +442,13 @@ export class ApiClient {
           } else if (msg.type === 'task_completed' && this.callbacks.onTaskCompleted) {
             this.callbacks.onTaskCompleted(msg as WsTaskCompleted);
           }
-        } catch { /* ignore malformed */ }
+        } catch {
+          Logger.debug('WS /task: malformed message', 'api');
+        }
       };
 
       this.wsTask.onclose = () => {
+        Logger.debug('WS /task disconnected, reconnect in 3s', 'api');
         this.reconnectTimers.task = setTimeout(() => this.connectTaskWs(), WS_RECONNECT_DELAY);
       };
 

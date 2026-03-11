@@ -2,6 +2,7 @@
  * TaskGroupModel —— 任务组数据模型。
  * 管理多个任务组的增删改查和持久化（通过 IPC 读写 task_groups.json）。
  */
+import { Logger } from '../utils/Logger';
 
 // ════════════════════════════════════════
 // 数据结构
@@ -148,6 +149,7 @@ export class TaskGroupModel {
       const parsed = JSON.parse(content) as TaskGroupsData;
       if (parsed && Array.isArray(parsed.groups)) {
         this.data = parsed;
+        Logger.debug(`任务组已加载: ${parsed.groups.length} 个组`);
       }
     } catch {
       // 文件不存在是正常的
@@ -160,8 +162,9 @@ export class TaskGroupModel {
       const bridge = (window as any).electronBridge;
       if (!bridge?.saveFile) return;
       await bridge.saveFile(STORAGE_FILE, JSON.stringify(this.data, null, 2));
+      Logger.debug(`任务组已保存: ${this.data.groups.length} 个组`);
     } catch (e) {
-      console.error('保存任务组失败:', e);
+      Logger.error(`保存任务组失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

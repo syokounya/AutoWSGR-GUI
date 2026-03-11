@@ -195,10 +195,12 @@ body {
 
 .main-right {
   width: 400px;
+  max-width: 400px;
   min-width: 300px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .main-right .log-card {
@@ -252,7 +254,8 @@ body {
 /* ═══ 状态行 ═══ */
 .status-row {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   align-items: stretch;
 }
 
@@ -1094,6 +1097,20 @@ body {
   flex-shrink: 0;
 }
 
+/* 实时资源计数（后端出征面板 OCR） */
+.tq-acquisition {
+  font-size: 10px;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  margin-left: 8px;
+  padding: 1px 6px;
+  background: var(--bg-inset);
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 /* ═══ 任务组 ═══ */
 .task-group-card {
   padding: 14px;
@@ -1101,6 +1118,7 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  margin-bottom: 0;
 }
 
 .task-group-header {
@@ -1352,6 +1370,69 @@ body {
 .log-entry.level-warning { background: rgba(251, 191, 36, 0.05); }
 .log-entry.level-error   { background: rgba(248, 113, 113, 0.07); }
 .log-entry.level-critical { background: rgba(255, 107, 107, 0.1); }
+
+/* 后端 [UI] 界面识别日志（v2.1.3 sortie panel OCR） */
+.log-entry.log-ui-recognition {
+  border-left-color: #2dd4bf;
+  background: rgba(45, 212, 191, 0.05);
+}
+.log-entry.log-ui-recognition .log-icon { color: #2dd4bf; }
+.log-entry.log-ui-recognition .log-msg  { color: #2dd4bf; }
+.log-entry.log-ui-recognition .log-channel { color: #2dd4bf; background: rgba(45, 212, 191, 0.1); }
+
+/* 迂回事件日志高亮（v2.1.3 改进了迂回检测精度） */
+.log-entry.log-detour {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+}
+.log-entry.log-detour .log-msg { color: #fbbf24; font-weight: 500; }
+
+/* 战果评价等级高亮 */
+.log-grade { font-weight: 700; padding: 0 2px; border-radius: 2px; }
+.log-grade.grade-ss  { color: #ffd700; text-shadow: 0 0 6px rgba(255, 215, 0, 0.6); }
+.log-grade.grade-s   { color: #f0c040; }
+.log-grade.grade-a   { color: #e879a0; }
+.log-grade.grade-low { color: #a78bfa; }
+
+/* 舰船掉落日志高亮 */
+.log-entry.log-ship-drop {
+  border-left-color: #34d399;
+  background: rgba(52, 211, 153, 0.06);
+}
+.log-entry.log-ship-drop .log-msg { color: #34d399; font-weight: 500; }
+.log-ship-drop-name { color: #34d399; font-weight: 700; }
+
+/* MVP 高亮 */
+.log-mvp { color: #fbbf24; font-weight: 600; }
+
+/* ═══ 日常操作工具栏（嵌入 status-row） ═══ */
+.ops-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+.ops-btn {
+  font-size: 11px !important;
+  padding: 3px 10px !important;
+  border-radius: 12px !important;
+  white-space: nowrap;
+}
+.ops-btn:disabled {
+  opacity: 0.45;
+}
+.ops-status {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
 
 /* 级别图标 */
 .log-icon {

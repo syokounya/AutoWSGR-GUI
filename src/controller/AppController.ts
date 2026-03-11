@@ -19,7 +19,7 @@ import type {
 } from '../view/viewObjects';
 import { PlanModel } from '../model/PlanModel';
 import { ConfigModel } from '../model/ConfigModel';
-import { ApiClient } from '../model/ApiClient';
+import { ApiClient, type ApiResponse } from '../model/ApiClient';
 import {
   Scheduler,
   TaskPriority,
@@ -40,6 +40,7 @@ import {
 } from '../model/types';
 import { loadMapData, loadExMapData, getNodeType, isDetourNode, isNightNode } from '../model/MapDataLoader';
 import { ALL_SHIPS, shipTypeLabel } from '../data/shipData';
+import { Logger } from '../utils/Logger';
 
 /** 将 repair_mode（数字或数组）转换为显示文本 */
 function resolveRepairModeLabel(mode: number | number[]): string {
@@ -62,6 +63,7 @@ interface ElectronBridge {
   saveFile: (path: string, content: string) => Promise<void>;
   saveFileDialog: (defaultName: string, content: string, filters: { name: string; extensions: string[] }[]) => Promise<string | null>;
   readFile: (path: string) => Promise<string>;
+  appendFile: (path: string, content: string) => Promise<void>;
   detectEmulator: () => Promise<{ type: string; path: string; serial: string; adbPath: string } | null>;
   checkAdbDevices: () => Promise<{ serial: string; status: string }[]>;
   getAppRoot: () => Promise<string>;
@@ -132,6 +134,9 @@ export class AppController {
   private wsConnected = false;
   private expeditionTimerText = '--:--';
   private currentProgress = '';
+  /** 后端出征面板 OCR 识别的实时资源计数 (v2.1.3+) */
+  private trackedLoot = '';   // e.g. "3/200"
+  private trackedShip = '';   // e.g. "253/500"
   private appRoot = '';
   private plansDir = '';
   private configDir = '';
@@ -171,6 +176,7 @@ export class AppController {
     this.bindCronCallbacks();
     this.bindTaskGroupActions();
     this.bindTemplateActions();
+    this.bindOpsActions();
     this.renderMain();
     this.planView.render(null);
 
@@ -179,9 +185,10 @@ export class AppController {
       if (this.getThemeMode() === 'system') this.applyTheme();
     });
 
-    // 窗口关闭时保存任务组状态
+    // 窗口关闭时保存任务组状态并刷新日志
     window.addEventListener('beforeunload', () => {
       this.taskGroupModel.save();
+      Logger.flush();
     });
 
     // 加载配置 → 自动检测模拟器 → 渲染 → 连接
@@ -206,12 +213,24 @@ export class AppController {
       this.configDir = await bridge.getConfigDir();
     }
 
+    // 初始化日志系统
+    Logger.init({
+      appendFile: bridge.appendFile.bind(bridge),
+      uiCallback: (level, channel, message) => {
+        const now = new Date();
+        const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        this.mainView.appendLog({ time, level, channel, message });
+      },
+      logDir: this.configDir,
+    });
+
     // 显示关键路径，帮助用户找到配置和方案目录
-    this.appendLocalLog('info', `配置文件目录: ${this.configDir}`);
-    this.appendLocalLog('info', `方案文件目录: ${this.plansDir}`);
+    Logger.info(`配置文件目录: ${this.configDir}`);
+    Logger.info(`方案文件目录: ${this.plansDir}`);
 
     // ── 1. 加载配置 & 渲染 (在环境检查前完成, 避免配置页长时间显示默认值) ──
     await this.loadConfig();
+    Logger.debug('配置加载完成');
     const da = this.configModel.current.daily_automation;
     this.cronScheduler.updateConfig({
       autoExercise: da.auto_exercise,
@@ -221,6 +240,7 @@ export class AppController {
       battleTimes: da.battle_times,
     });
     await this.detectAndApplyEmulator();
+    Logger.debug('模拟器检测完成');
     this.renderConfig();
     this.mainView.setDebugMode(localStorage.getItem('debugMode') === 'true');
 
@@ -247,7 +267,7 @@ export class AppController {
         // 提取日志正文：去掉 "HH:MM:SS.mmm | LEVEL | module/file:line | " 前缀
         const msgMatch = clean.match(/\|\s*(?:INFO|WARNING|ERROR)\s*\|\s*\S+\s*\|\s*(.+)/);
         const message = msgMatch ? msgMatch[1].trim() : clean;
-        this.appendLocalLog(level, message);
+        Logger.logLevel(level, message);
       });
     }
 
@@ -259,7 +279,7 @@ export class AppController {
     this.checkForUpdates(bridge);
 
     // ── 4. 启动后端 & 连接 ──
-    this.appendLocalLog('info', '正在启动后端服务…');
+    Logger.info('正在启动后端服务…');
     await bridge.startBackend();
     // 等待后端就绪后再连接
     this.waitForBackendAndConnect();
@@ -267,7 +287,7 @@ export class AppController {
 
   /** 检查 Python 环境, 缺失时自动安装本地便携版 */
   private async checkAndPrepareEnv(bridge: ElectronBridge): Promise<boolean> {
-    this.appendLocalLog('info', '正在检查运行环境…');
+    Logger.info('正在检查运行环境…');
 
     let env = await bridge.checkEnvironment();
 
@@ -276,16 +296,16 @@ export class AppController {
       if (bridge.installPortablePython) {
         const result = await bridge.installPortablePython();
         if (!result.success) {
-          this.appendLocalLog('error', 'Python 安装失败，请手动运行 setup.bat');
+          Logger.error('Python 安装失败，请手动运行 setup.bat');
           return false;
         }
       } else {
-        this.appendLocalLog('error', '未找到 Python，请安装 Python 3.12+');
+        Logger.error('未找到 Python，请安装 Python 3.12+');
         return false;
       }
       env = await bridge.checkEnvironment();
       if (!env.pythonCmd) {
-        this.appendLocalLog('error', '安装后仍未检测到 Python，请重启应用');
+        Logger.error('安装后仍未检测到 Python，请重启应用');
         return false;
       }
     }
@@ -295,19 +315,19 @@ export class AppController {
     }
 
     // 缺少依赖，尝试自动安装
-    this.appendLocalLog('info', `正在安装缺失依赖: ${env.missingPackages.join(', ')}…`);
+    Logger.info(`正在安装缺失依赖: ${env.missingPackages.join(', ')}…`);
     const installResult = await bridge.installDeps();
 
     if (!installResult.success) {
-      this.appendLocalLog('error', '依赖安装失败');
-      this.appendLocalLog('error', installResult.output.slice(-200));
+      Logger.error('依赖安装失败');
+      Logger.error(installResult.output.slice(-200));
       return false;
     }
 
     // 重新检查
     env = await bridge.checkEnvironment();
     if (!env.allReady) {
-      this.appendLocalLog('error', `仍缺少依赖: ${env.missingPackages.join(', ')}`);
+      Logger.error(`仍缺少依赖: ${env.missingPackages.join(', ')}`);
       return false;
     }
 
@@ -325,11 +345,11 @@ export class AppController {
           const trimmed = line.trim();
           if (!trimmed) continue;
           if (trimmed.startsWith('√')) {
-            this.appendLocalLog('info', trimmed);
+            Logger.info(trimmed);
           } else if (trimmed.startsWith('×')) {
-            this.appendLocalLog('error', trimmed);
+            Logger.error(trimmed);
           } else if (trimmed.includes('下载') || trimmed.includes('安装') || trimmed.includes('检测')) {
-            this.appendLocalLog('info', trimmed);
+            Logger.info(trimmed);
           }
         }
       });
@@ -344,7 +364,7 @@ export class AppController {
     try {
       const updates = await bridge.checkUpdates();
       if (updates.hasUpdates) {
-        this.appendLocalLog('warn', `发现 ${updates.behindCount} 个新提交可更新，可通过「配置 → 检查更新」拉取`);
+        Logger.warn(`发现 ${updates.behindCount} 个新提交可更新，可通过「配置 → 检查更新」拉取`);
       }
     } catch { /* 忽略 */ }
   }
@@ -353,19 +373,19 @@ export class AppController {
   private waitForBackendAndConnect(retries = 30): void {
     this.scheduler.ping().then((alive) => {
       if (alive) {
-        this.appendLocalLog('info', '后端服务就绪，正在连接模拟器…');
+        Logger.info('后端服务就绪，正在连接模拟器…');
         this.startSystem();
       } else if (retries > 0) {
         setTimeout(() => this.waitForBackendAndConnect(retries - 1), 1000);
       } else {
-        this.appendLocalLog('error', '后端服务启动超时，请检查 Python 环境');
+        Logger.error('后端服务启动超时，请检查 Python 环境');
         this.renderMain();
       }
     }).catch(() => {
       if (retries > 0) {
         setTimeout(() => this.waitForBackendAndConnect(retries - 1), 1000);
       } else {
-        this.appendLocalLog('error', '后端连接失败');
+        Logger.error('后端连接失败');
         this.renderMain();
       }
     });
@@ -382,29 +402,29 @@ export class AppController {
 
     this.scheduler.start(configPath).then((ok) => {
       if (ok) {
-        this.appendLocalLog('info', '系统启动成功 ✓');
+        Logger.info('系统启动成功 ✓');
         this.cronScheduler.start();
-        this.appendLocalLog('info', '定时调度器已启动');
+        Logger.info('定时调度器已启动');
       } else {
-        this.appendLocalLog('error', '系统启动失败 (模拟器连接/游戏启动异常)');
+        Logger.error('系统启动失败 (模拟器连接/游戏启动异常)');
       }
       this.renderMain();
     }).catch(async (e) => {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('abort')) {
         // HTTP 超时但后端可能已完成 —— 尝试恢复
-        this.appendLocalLog('warn', '系统启动 HTTP 请求超时，正在检测后端状态…');
+        Logger.warn('系统启动 HTTP 请求超时，正在检测后端状态…');
         const alive = await this.scheduler.ping();
         if (alive) {
-          this.appendLocalLog('info', '后端已就绪，正在恢复连接…');
+          Logger.info('后端已就绪，正在恢复连接…');
           this.scheduler.recoverAfterTimeout();
           this.cronScheduler.start();
-          this.appendLocalLog('info', '定时调度器已启动');
+          Logger.info('定时调度器已启动');
         } else {
-          this.appendLocalLog('error', '系统启动超时且后端未响应 (模拟器连接耗时过长)');
+          Logger.error('系统启动超时且后端未响应 (模拟器连接耗时过长)');
         }
       } else {
-        this.appendLocalLog('error', `系统启动异常: ${msg}`);
+        Logger.error(`系统启动异常: ${msg}`);
       }
       this.renderMain();
     });
@@ -417,12 +437,13 @@ export class AppController {
     try {
       const yamlStr = await bridge.readFile('usersettings.yaml');
       this.configModel.loadFromYaml(yamlStr);
+      Logger.debug('usersettings.yaml 已加载');
     } catch {
       // 文件不存在时使用默认值，并自动保存一份供用户参考
-      console.log('usersettings.yaml 未找到，自动创建默认配置');
+      Logger.debug('usersettings.yaml 未找到，自动创建默认配置');
       const defaultYaml = this.configModel.toYaml();
       await bridge.saveFile('usersettings.yaml', defaultYaml);
-      this.appendLocalLog('info', `已创建默认配置文件: ${this.configDir}\\usersettings.yaml`);
+      Logger.info(`已创建默认配置文件: ${this.configDir}\\usersettings.yaml`);
     }
   }
 
@@ -480,10 +501,10 @@ export class AppController {
         // 自动保存检测结果
         const yamlStr = this.configModel.toYaml();
         await bridge.saveFile('usersettings.yaml', yamlStr);
-        console.log('自动检测到模拟器:', result);
+        Logger.debug(`自动检测到模拟器: type=${result.type} path=${result.path} serial=${result.serial}`);
       }
     } catch (e) {
-      console.warn('模拟器自动检测失败:', e);
+      Logger.debug(`模拟器自动检测失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -545,7 +566,7 @@ export class AppController {
           if (online.length === 1) {
             // 只有一个设备，直接填入
             (document.getElementById('cfg-emu-serial') as HTMLInputElement).value = online[0].serial;
-            this.appendLocalLog('info', `ADB 检测到在线设备: ${online[0].serial}，已自动填入`);
+            Logger.info(`ADB 检测到在线设备: ${online[0].serial}，已自动填入`);
           } else {
             // 多个设备，让用户确认
             const ok = await this.showConfirm('ADB 检测', msg);
@@ -566,7 +587,7 @@ export class AppController {
     document.getElementById('btn-stop-task')?.addEventListener('click', async () => {
       await this.scheduler.stopRunning();
       this.renderMain();
-      this.appendLocalLog('info', '已停止当前任务');
+      Logger.info('已停止当前任务');
     });
 
     // 清空队列
@@ -878,7 +899,7 @@ export class AppController {
   private async exportTaskGroup(): Promise<void> {
     const group = this.taskGroupModel.getActiveGroup();
     if (!group || group.items.length === 0) {
-      this.appendLocalLog('warn', '当前任务列表为空，无法导出');
+      Logger.warn('当前任务列表为空，无法导出');
       return;
     }
     const bridge = window.electronBridge;
@@ -892,7 +913,7 @@ export class AppController {
       [{ name: '任务列表模板', extensions: ['taskgroup.json', 'json'] }],
     );
     if (saved) {
-      this.appendLocalLog('info', `已导出任务列表「${group.name}」`);
+      Logger.info(`已导出任务列表「${group.name}」`);
     }
   }
 
@@ -945,13 +966,13 @@ export class AppController {
 
     this.taskGroupModel.save();
     this.renderTaskGroup();
-    this.appendLocalLog('info', `已导入任务列表「${groupName}」（${data.items.length} 项）`);
+    Logger.info(`已导入任务列表「${groupName}」（${data.items.length} 项）`);
   }
 
   /** 将当前方案页预览的方案加入活跃任务组 */
   private addCurrentPlanToGroup(): void {
     if (!this.currentPlan) {
-      this.appendLocalLog('warn', '没有已加载的方案');
+      Logger.warn('没有已加载的方案');
       return;
     }
     let group = this.taskGroupModel.getActiveGroup();
@@ -974,7 +995,7 @@ export class AppController {
     });
     this.taskGroupModel.save();
     this.renderTaskGroup();
-    this.appendLocalLog('info', `已将「${label} ×${times}」加入任务组「${group.name}」`);
+    Logger.info(`已将「${label} ×${times}」加入任务组「${group.name}」`);
   }
 
   /** 从文件对话框添加条目到当前组 */
@@ -1009,14 +1030,14 @@ export class AppController {
     });
     this.taskGroupModel.save();
     this.renderTaskGroup();
-    this.appendLocalLog('info', `已添加「${label}」到任务组「${group.name}」`);
+    Logger.info(`已添加「${label}」到任务组「${group.name}」`);
   }
 
   /** 将当前任务组全部条目加入调度队列 */
   private async loadGroupToQueue(): Promise<void> {
     const group = this.taskGroupModel.getActiveGroup();
     if (!group || group.items.length === 0) {
-      this.appendLocalLog('warn', '当前任务组为空');
+      Logger.warn('当前任务组为空');
       return;
     }
     const bridge = window.electronBridge;
@@ -1046,12 +1067,12 @@ export class AppController {
         loadedCount++;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        this.appendLocalLog('error', `加载「${item.label}」失败: ${msg}`);
+        Logger.error(`加载「${item.label}」失败: ${msg}`);
       }
     }
 
     if (loadedCount > 0) {
-      this.appendLocalLog('info', `已从任务组「${group.name}」加载 ${loadedCount} 个任务到队列`);
+      Logger.info(`已从任务组「${group.name}」加载 ${loadedCount} 个任务到队列`);
       this.switchPage('main');
       this.renderMain();
     }
@@ -1085,11 +1106,11 @@ export class AppController {
         this.scheduler.addTask(plan.mapName, 'normal_fight', req, TaskPriority.USER_TASK, item.times, plan.data.stop_condition);
       }
 
-      this.appendLocalLog('info', `已将「${item.label}」加入队列`);
+      Logger.info(`已将「${item.label}」加入队列`);
       this.renderMain();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      this.appendLocalLog('error', `加载「${item.label}」失败: ${msg}`);
+      Logger.error(`加载「${item.label}」失败: ${msg}`);
     }
   }
 
@@ -1140,7 +1161,7 @@ export class AppController {
       if (planId) {
         await this.openItemForEdit(planId, 'plan');
       } else {
-        this.appendLocalLog('warn', `「${task.name}」没有关联的方案文件`);
+        Logger.warn(`「${task.name}」没有关联的方案文件`);
       }
     }
   }
@@ -1168,7 +1189,7 @@ export class AppController {
       this.switchPage('plan');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      this.appendLocalLog('error', `打开编辑失败: ${msg}`);
+      Logger.error(`打开编辑失败: ${msg}`);
     }
   }
 
@@ -1189,6 +1210,8 @@ export class AppController {
 
       onTaskCompleted: (taskId, success, _result, _error) => {
         this.currentProgress = '';
+        this.trackedLoot = '';
+        this.trackedShip = '';
         // 演习/战役任务完成后更新时间戳 (或清除 pending 以便重试)
         if (taskId === this.pendingExerciseTaskId) {
           if (success) {
@@ -1210,13 +1233,12 @@ export class AppController {
       },
 
       onLog: (msg) => {
-        const entry: LogEntryVO = {
-          time: msg.timestamp.slice(11, 19), // HH:MM:SS
-          level: msg.level.toLowerCase(),
-          channel: msg.channel,
-          message: msg.message,
-        };
-        this.mainView.appendLog(entry);
+        // 解析后端出征面板 OCR 日志 (v2.1.3 sortie panel mixin)
+        const lootMatch = msg.message.match(/\[UI\] 战利品数量: (\d+\/\d+)/);
+        const shipMatch = msg.message.match(/\[UI\] 舰船数量: (\d+\/\d+)/);
+        if (lootMatch) { this.trackedLoot = lootMatch[1]; this.renderMain(); }
+        if (shipMatch) { this.trackedShip = shipMatch[1]; this.renderMain(); }
+        Logger.logLevel(msg.level.toLowerCase(), msg.message, msg.channel);
       },
 
       onQueueChange: () => {
@@ -1225,6 +1247,15 @@ export class AppController {
 
       onConnectionChange: (connected) => {
         this.wsConnected = connected;
+        this.updateOpsAvailability(connected);
+        if (connected) {
+          this.api.health().then(res => {
+            if (res.success && res.data) {
+              const uptime = Math.floor(res.data.uptime_seconds);
+              Logger.debug(`后端健康检查: 运行 ${uptime}s, 模拟器${res.data.emulator_connected ? '已连接' : '未连接'}`);
+            }
+          }).catch(() => {});
+        }
         this.renderMain();
       },
 
@@ -1251,7 +1282,7 @@ export class AppController {
           1,
         );
         this.pendingExerciseTaskId = id;
-        this.appendLocalLog('info', `自动演习已加入队列 (舰队 ${fleetId})`);
+        Logger.info(`自动演习已加入队列 (舰队 ${fleetId})`);
         this.scheduler.startConsuming();
       },
 
@@ -1264,19 +1295,68 @@ export class AppController {
           times,
         );
         this.pendingBattleTaskId = id;
-        this.appendLocalLog('info', `自动战役已加入队列 (${campaignName} ×${times})`);
+        Logger.info(`自动战役已加入队列 (${campaignName} ×${times})`);
         this.scheduler.startConsuming();
       },
 
       onScheduledTaskDue: (taskKey) => {
-        this.appendLocalLog('info', `定时任务「${taskKey}」已触发`);
+        Logger.info(`定时任务「${taskKey}」已触发`);
         // scheduled tasks are handled via plan re-import (future extension)
       },
 
       onLog: (level, message) => {
-        this.appendLocalLog(level, message);
+        Logger.logLevel(level, message);
       },
     });
+  }
+
+  // ════════════════════════════════════════
+  // 日常操作按钮绑定
+  // ════════════════════════════════════════
+
+  private bindOpsActions(): void {
+    const wrap = (btnId: string, label: string, action: () => Promise<ApiResponse>) => {
+      document.getElementById(btnId)?.addEventListener('click', async () => {
+        const btn = document.getElementById(btnId) as HTMLButtonElement;
+        btn.disabled = true;
+        const statusEl = document.getElementById('ops-status');
+        if (statusEl) statusEl.textContent = `${label}中…`;
+        try {
+          const res = await action();
+          if (res.success) {
+            Logger.info(`${label}完成`);
+            if (statusEl) statusEl.textContent = `${label}完成`;
+          } else {
+            Logger.warn(`${label}失败: ${res.message ?? '未知错误'}`);
+            if (statusEl) statusEl.textContent = `${label}失败`;
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          Logger.error(`${label}异常: ${msg}`);
+          if (statusEl) statusEl.textContent = `${label}异常`;
+        } finally {
+          btn.disabled = false;
+          setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+        }
+      });
+    };
+
+    wrap('btn-ops-expedition', '收取远征', () => this.api.expeditionCheck());
+    wrap('btn-ops-reward', '收取奖励', () => this.api.rewardCollect());
+    wrap('btn-ops-build-collect', '收取建造', () => this.api.buildCollect());
+    wrap('btn-ops-cook', '食堂烹饪', () => this.api.cook());
+    wrap('btn-ops-repair', '浴室修理', () => this.api.repairBath());
+  }
+
+  /** 根据连接状态启用/禁用日常操作按钮 */
+  private updateOpsAvailability(connected: boolean): void {
+    const ids = ['btn-ops-expedition', 'btn-ops-reward', 'btn-ops-build-collect', 'btn-ops-cook', 'btn-ops-repair'];
+    for (const id of ids) {
+      const btn = document.getElementById(id) as HTMLButtonElement | null;
+      if (btn) btn.disabled = !connected;
+    }
+    const statusEl = document.getElementById('ops-status');
+    if (statusEl) statusEl.textContent = connected ? '' : '未连接';
   }
 
   // ════════════════════════════════════════
@@ -1301,6 +1381,7 @@ export class AppController {
       // 含 chapter + map 的文件视为战斗方案 (可能同时含 times/stop_condition 等任务字段)
       if (parsed && typeof parsed === 'object' && 'chapter' in parsed && 'map' in parsed) {
         this.currentPlan = PlanModel.fromYaml(result.content, result.path);
+        Logger.debug(`方案已导入: ${result.path}`);
         const { chapter, map } = this.currentPlan.data;
         this.currentMapData = chapter === 99
           ? await loadExMapData(map)
@@ -1320,7 +1401,7 @@ export class AppController {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error('YAML 解析失败:', msg);
-      this.appendLocalLog('error', `文件导入失败: ${msg}`);
+      Logger.error(`文件导入失败: ${msg}`);
     }
   }
 
@@ -1487,13 +1568,13 @@ export class AppController {
     if (effectiveTimes > 1 || stopCondition) parts.push(`×${effectiveTimes}`);
     if (stopCondition?.loot_count_ge) parts.push(`战利品≥${stopCondition.loot_count_ge}时停止`);
     if (stopCondition?.ship_count_ge) parts.push(`舰船≥${stopCondition.ship_count_ge}时停止`);
-    this.appendLocalLog('info', `任务「${name}」已加入队列${parts.length ? ' (' + parts.join(', ') + ')' : ''}`);
+    Logger.info(`任务「${name}」已加入队列${parts.length ? ' (' + parts.join(', ') + ')' : ''}`);
   }
 
   /** 将当前预设加入任务组 */
   private addPresetToGroup(): void {
     if (!this.currentPreset || !this.currentPresetFilePath) {
-      this.appendLocalLog('warn', '没有已加载的任务预设');
+      Logger.warn('没有已加载的任务预设');
       return;
     }
     let group = this.taskGroupModel.getActiveGroup();
@@ -1513,7 +1594,7 @@ export class AppController {
     });
     this.taskGroupModel.save();
     this.renderTaskGroup();
-    this.appendLocalLog('info', `已将「${label} ×${times}」加入任务组「${group.name}」`);
+    Logger.info(`已将「${label} ×${times}」加入任务组「${group.name}」`);
   }
 
   // ════════════════════════════════════════
@@ -1545,6 +1626,7 @@ export class AppController {
       times,
       stopCondition,
     );
+    Logger.debug(`executePlan: map=${plan.mapName} plan_id=${plan.fileName} times=${times} gap=${req.gap}`);
 
     this.switchPage('main');
     this.renderMain();
@@ -1554,7 +1636,7 @@ export class AppController {
       const parts: string[] = [`×${times}`];
       if (stopCondition.loot_count_ge) parts.push(`战利品≥${stopCondition.loot_count_ge}时停止`);
       if (stopCondition.ship_count_ge) parts.push(`舰船≥${stopCondition.ship_count_ge}时停止`);
-      this.appendLocalLog('info', `任务「${plan.mapName}」已加入队列 (${parts.join(', ')})`);
+      Logger.info(`任务「${plan.mapName}」已加入队列 (${parts.join(', ')})`);
     }
   }
 
@@ -1629,8 +1711,10 @@ export class AppController {
         name: running.name,
         priorityLabel: PRIORITY_LABELS[running.priority] ?? '用户',
         remaining: running.remainingTimes,
+        totalTimes: running.totalTimes,
         progress: this.currentProgress || undefined,
         progressPercent,
+        acquisitionText: this.buildAcquisitionText(),
       });
     }
 
@@ -1640,6 +1724,7 @@ export class AppController {
         name: t.name,
         priorityLabel: PRIORITY_LABELS[t.priority] ?? '用户',
         remaining: t.remainingTimes,
+        totalTimes: t.totalTimes,
       });
     }
 
@@ -1660,6 +1745,14 @@ export class AppController {
       runningTaskId: running?.id ?? null,
     };
     this.mainView.render(vo);
+  }
+
+  /** 根据日志中解析到的后端 OCR 数据构建资源文本 */
+  private buildAcquisitionText(): string | undefined {
+    const parts: string[] = [];
+    if (this.trackedLoot) parts.push(`装备 ${this.trackedLoot}`);
+    if (this.trackedShip) parts.push(`舰船 ${this.trackedShip}`);
+    return parts.length > 0 ? parts.join(' | ') : undefined;
   }
 
   private closePlan(): void {
@@ -1694,7 +1787,7 @@ export class AppController {
     ]);
     if (saved) {
       this.currentPlan.fileName = saved;
-      this.appendLocalLog('info', `方案已导出: ${saved}`);
+      Logger.info(`方案已导出: ${saved}`);
       this.renderPlanPreview();
     }
   }
@@ -1832,7 +1925,7 @@ export class AppController {
       }
 
       if (!mapData) {
-        this.appendLocalLog('error', `地图 ${mapLabel} 数据不存在`);
+        Logger.error(`地图 ${mapLabel} 数据不存在`);
         return;
       }
 
@@ -1841,10 +1934,10 @@ export class AppController {
       this.currentMapData = mapData;
       this.renderPlanPreview();
       this.switchPage('plan');
-      this.appendLocalLog('info', `已新建方案 ${mapLabel}，共 ${allNodes.length} 个节点`);
+      Logger.info(`已新建方案 ${mapLabel}，共 ${allNodes.length} 个节点`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      this.appendLocalLog('error', `新建方案失败: ${msg}`);
+      Logger.error(`新建方案失败: ${msg}`);
     }
   }
 
@@ -2437,7 +2530,7 @@ export class AppController {
     await this.templateModel.add(partial);
     this.hideWizard();
     this.renderTemplateLibrary();
-    this.appendLocalLog('info', `模板「${name}」已创建`);
+    Logger.info(`模板「${name}」已创建`);
   }
 
   // ── 使用模板 → 加入任务队列 ──
@@ -2501,7 +2594,7 @@ export class AppController {
     );
 
     this.renderMain();
-    this.appendLocalLog('info', `模板「${tpl.name}」→ 任务已加入队列 (×${effectiveTimes})`);
+    Logger.info(`模板「${tpl.name}」→ 任务已加入队列 (×${effectiveTimes})`);
   }
 
   private async deleteTemplate(id: string): Promise<void> {
@@ -2511,7 +2604,7 @@ export class AppController {
     if (!ok) return;
     await this.templateModel.remove(id);
     this.renderTemplateLibrary();
-    this.appendLocalLog('info', `模板「${tpl.name}」已删除`);
+    Logger.info(`模板「${tpl.name}」已删除`);
   }
 
   private async renameTemplate(id: string): Promise<void> {
@@ -2553,7 +2646,7 @@ export class AppController {
       const rest = valid.slice(1);
       const count = await this.templateModel.importFromJson(rest);
       this.renderTemplateLibrary();
-      this.appendLocalLog('info', `其余 ${count} 个模板已直接导入`);
+      Logger.info(`其余 ${count} 个模板已直接导入`);
     }
   }
 
@@ -2620,12 +2713,6 @@ export class AppController {
     return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
   }
 
-  /** 追加一条本地日志到 UI (非后端推送) */
-  private appendLocalLog(level: string, message: string): void {
-    const now = new Date();
-    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    this.mainView.appendLog({ time, level, channel: 'GUI', message });
-  }
 }
 
 // ── 入口：实例化并初始化 ──

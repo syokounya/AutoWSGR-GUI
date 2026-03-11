@@ -151,15 +151,30 @@ export class MainView {
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'tq-name';
-        nameSpan.textContent = `${item.name} ×${item.remaining}`;
+        nameSpan.textContent = item.totalTimes > 1
+          ? `${item.name} ×${item.totalTimes}`
+          : item.name;
         div.appendChild(nameSpan);
 
-        // 进度文本（仅正在运行的任务）
-        if (isRunning && item.progress) {
+        // 进度文本
+        if (isRunning) {
           const progSpan = document.createElement('span');
           progSpan.className = 'tq-progress';
-          progSpan.textContent = item.progress;
-          div.appendChild(progSpan);
+          if (item.totalTimes > 1) {
+            const currentRound = item.totalTimes - item.remaining + 1;
+            progSpan.textContent = `${currentRound}/${item.totalTimes}`;
+          } else if (item.progress) {
+            progSpan.textContent = item.progress;
+          }
+          if (progSpan.textContent) div.appendChild(progSpan);
+
+          // 实时资源计数（后端出征面板 OCR）
+          if (item.acquisitionText) {
+            const acqSpan = document.createElement('span');
+            acqSpan.className = 'tq-acquisition';
+            acqSpan.textContent = item.acquisitionText;
+            div.appendChild(acqSpan);
+          }
         }
 
         const prioSpan = document.createElement('span');
@@ -291,9 +306,30 @@ export class MainView {
     const div = document.createElement('div');
     div.className = `log-entry level-${level}`;
     div.dataset.level = level;
+    // v2.1.3: [UI] 标记的日志来自后端界面识别，给予特殊样式
+    if (entry.message.startsWith('[UI]')) div.classList.add('log-ui-recognition');
+    // 迂回相关日志高亮（v2.1.3 改进了迂回检测精度）
+    if (entry.message.includes('迂回')) div.classList.add('log-detour');
+    // 舰船掉落高亮
+    if (entry.message.includes('掉落')) div.classList.add('log-ship-drop');
     if (!this.logFilterState[level]) div.classList.add('log-hidden');
 
     const icon = LOG_ICONS[level] || LOG_ICONS.info;
+    // 战果评价等级高亮
+    let msgHtml = this.esc(entry.message);
+    msgHtml = msgHtml.replace(/评价=(SS|S|A|B|C|D)\b/, (_, g) => {
+      const cls = g === 'SS' ? 'grade-ss' : g === 'S' ? 'grade-s' : g === 'A' ? 'grade-a' : 'grade-low';
+      return `评价=<span class="log-grade ${cls}">${g}</span>`;
+    });
+    // MVP 高亮
+    msgHtml = msgHtml.replace(/MVP[:：]\s*(.+?)(?=\s*[,，|]|$)/, (m, name) => {
+      return `<span class="log-mvp">MVP: ${name}</span>`;
+    });
+    // 舰船掉落名称高亮
+    msgHtml = msgHtml.replace(/掉落[:：]\s*(.+?)(?=\s*$)/, (m, name) => {
+      return `掉落: <span class="log-ship-drop-name">${name}</span>`;
+    });
+
     div.innerHTML =
       `${icon}` +
       `<div class="log-body">` +
@@ -301,7 +337,7 @@ export class MainView {
           `<span class="log-time">${this.esc(entry.time)}</span>` +
           `<span class="log-channel">${this.esc(entry.channel)}</span>` +
         `</div>` +
-        `<div class="log-msg">${this.esc(entry.message)}</div>` +
+        `<div class="log-msg">${msgHtml}</div>` +
       `</div>`;
 
     this.logContainer.appendChild(div);

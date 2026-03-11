@@ -36,10 +36,13 @@ export interface TaskQueueItemVO {
   name: string;
   priorityLabel: string;         // "远征" | "用户" | "日常"
   remaining: number;
+  totalTimes: number;
   /** 进度文本，如 "2/5"，仅当前运行的任务有值 */
   progress?: string;
   /** 进度百分比 0~1，用于进度条 */
   progressPercent?: number;
+  /** 实时资源文本（后端出征面板 OCR 结果），如 "装备 3/200 | 舰船 253/500" */
+  acquisitionText?: string;
 }
 
 /** 日志条目 */

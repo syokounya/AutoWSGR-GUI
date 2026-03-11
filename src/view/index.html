@@ -35,6 +35,14 @@
               <span>远征检查倒计时：</span>
               <span id="expedition-timer">--:--</span>
             </div>
+            <div class="ops-toolbar" id="ops-card">
+              <button class="btn btn-small ops-btn" id="btn-ops-expedition" title="收取所有已完成的远征">收取远征</button>
+              <button class="btn btn-small ops-btn" id="btn-ops-reward" title="收取每日奖励">收取奖励</button>
+              <button class="btn btn-small ops-btn" id="btn-ops-build-collect" title="收取已完成的建造">收取建造</button>
+              <button class="btn btn-small ops-btn" id="btn-ops-cook" title="食堂烹饪">食堂烹饪</button>
+              <button class="btn btn-small ops-btn" id="btn-ops-repair" title="浴室快速修理">浴室修理</button>
+              <span class="ops-status" id="ops-status"></span>
+            </div>
           </div>
 
           <!-- 统一任务区域：空闲 / 队列 / 运行 合并 -->
@@ -352,7 +360,7 @@
               <div class="form-group">
                 <label>索敌规则</label>
                 <textarea id="node-edit-rules" class="input node-rules-textarea" rows="2"
-                  placeholder="每行一条，如: DD + CL <= 1, 4"></textarea>
+                  placeholder="每行一条，如: DD >= 1, 4&#10;多条件用 and 连接: DD >= 1 and CL >= 2, 4"></textarea>
               </div>
               <button class="btn btn-primary btn-small" id="btn-node-edit-save">应用</button>
             </div>

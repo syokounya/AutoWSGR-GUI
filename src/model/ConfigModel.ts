@@ -4,6 +4,7 @@
  */
 import * as yaml from 'js-yaml';
 import type { UserSettings } from './types';
+import { Logger } from '../utils/Logger';
 
 const DEFAULT_SETTINGS: UserSettings = {
   emulator: {
@@ -40,7 +41,10 @@ export class ConfigModel {
   /** 从 YAML 字符串加载配置，缺失字段保留默认值 */
   loadFromYaml(yamlStr: string): void {
     const parsed = yaml.load(yamlStr) as Record<string, unknown> | null;
-    if (!parsed || typeof parsed !== 'object') return;
+    if (!parsed || typeof parsed !== 'object') {
+      Logger.debug('配置 YAML 解析结果为空，使用默认值');
+      return;
+    }
 
     const base = structuredClone(DEFAULT_SETTINGS);
 

@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld('electronBridge', {
     return ipcRenderer.invoke('read-file', filePath);
   },
 
+  appendFile: (filePath: string, content: string) => {
+    return ipcRenderer.invoke('append-file', filePath, content);
+  },
+
   detectEmulator: () => {
     return ipcRenderer.invoke('detect-emulator');
   },

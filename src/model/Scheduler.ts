@@ -21,6 +21,7 @@ import {
   type TaskResult,
 } from './ApiClient';
 import type { StopCondition } from './types';
+import { Logger } from '../utils/Logger';
 
 // ════════════════════════════════════════
 // 任务队列项
@@ -49,6 +50,8 @@ export interface SchedulerTask {
   request: TaskRequest;
   /** 重复剩余次数 (用于任务分拆: 打500次 → 每次打1次然后后触发剩余) */
   remainingTimes: number;
+  /** 总次数（用于显示进度） */
+  totalTimes: number;
   /** 后端返回的 task_id (仅当前正在运行的任务有值) */
   backendTaskId?: string;
   /** 可选的停止条件: 每轮完成后检查，满足则不再后触发 */
@@ -93,6 +96,13 @@ export interface SchedulerCallbacks {
 const DEFAULT_EXPEDITION_INTERVAL_MS = 15 * 60 * 1000; // 15 分钟
 const EXPEDITION_TIMER_TICK_MS = 1000;          // 每秒更新倒计时
 
+/** 从 "[UI] 战利品数量: 50/50" 格式中提取当前值 */
+function parseUiCount(msg: string, label: string): number | null {
+  const re = new RegExp(`\\[UI\\] ${label}[:：]\\s*(\\d+)`);
+  const m = msg.match(re);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 let nextTaskId = 1;
 function generateTaskId(): string {
   return `sched_${nextTaskId++}`;
@@ -109,10 +119,15 @@ export class Scheduler {
   // ── 状态 ──
   private _status: SchedulerStatus = 'not_connected';
   private connected = false;
+  /** 用户主动停止标志，阻止 handleTaskFinished 创建后续任务 */
+  private _stopped = false;
 
   // ── 远征定时器 ──
   private expeditionTimer: ReturnType<typeof setInterval> | null = null;
   private expeditionTickTimer: ReturnType<typeof setInterval> | null = null;
+  /** 从后端 [UI] 日志 OCR 中解析的战利品/舰船当前值 */
+  private trackedLootCount: number | null = null;
+  private trackedShipCount: number | null = null;
   private lastExpeditionCheck = 0; // timestamp ms
   private expeditionIntervalMs = DEFAULT_EXPEDITION_INTERVAL_MS;
 
@@ -222,6 +237,7 @@ export class Scheduler {
       priority,
       request,
       remainingTimes: times,
+      totalTimes: times,
       stopCondition,
       maxRetries: 2,
       retryCount: 0,
@@ -236,6 +252,7 @@ export class Scheduler {
 
   /** 手动开始消费队列 */
   startConsuming(): void {
+    this._stopped = false;
     if (this._status === 'idle' && !this.currentTask && this.queue.length > 0) {
       this.consumeNext();
     }
@@ -260,6 +277,8 @@ export class Scheduler {
 
   /** 立即停止当前任务并清除运行状态（不删除队列，不自动消费下一个） */
   async stopRunning(): Promise<void> {
+    Logger.debug(`stopRunning: currentTask=${this.currentTask?.name ?? 'null'} queueLen=${this.queue.length}`, 'scheduler');
+    this._stopped = true;
     if (this.currentTask) {
       try { await this.api.taskStop(); } catch { /* ignore */ }
       this.currentTask = null;
@@ -297,6 +316,22 @@ export class Scheduler {
     this.currentTask = task;
     this.setStatus('running');
     this.notifyQueueChange();
+
+    Logger.debug(`consumeNext: 「${task.name}」 type=${task.type} remaining=${task.remainingTimes}/${task.totalTimes} req=${JSON.stringify(task.request)}`, 'scheduler');
+
+    // 远征任务: 直接调用远征 API，不走 taskStart 流程
+    if (task.type === 'expedition') {
+      try {
+        this.emitLog('info', '正在检查远征...');
+        await this.api.expeditionCheck();
+        this.emitLog('info', '远征检查完成');
+      } catch {
+        this.emitLog('debug', '远征检查跳过');
+      }
+      this.currentTask = null;
+      this.consumeNext();
+      return;
+    }
 
     try {
       const resp = await this.api.taskStart(task.request);
@@ -340,6 +375,16 @@ export class Scheduler {
     const finished = this.currentTask;
     if (!finished) return;
 
+    // 用户主动停止后，不再创建后续任务
+    if (this._stopped) {
+      Logger.debug(`handleTaskFinished: _stopped flag set, skipping follow-up for 「${finished.name}」`, 'scheduler');
+      this._stopped = false;
+      this.currentTask = null;
+      this.setStatus('idle');
+      this.notifyQueueChange();
+      return;
+    }
+
     // 执行失败 → 尝试重试
     if (!success) {
       if (finished.retryCount < finished.maxRetries) {
@@ -365,7 +410,7 @@ export class Scheduler {
 
     // 后触发: 如果还有剩余次数，追加一个新任务回队列
     if (finished.remainingTimes > 1) {
-      // 检查停止条件
+      // 停止条件检查：通过 gameContext 读取计数器
       if (finished.stopCondition) {
         const shouldStop = await this.checkStopCondition(finished.stopCondition, finished.name);
         if (shouldStop) {
@@ -383,10 +428,12 @@ export class Scheduler {
         priority: finished.priority,
         request: finished.request,
         remainingTimes: finished.remainingTimes - 1,
+        totalTimes: finished.totalTimes,
         stopCondition: finished.stopCondition,
         maxRetries: finished.maxRetries,
         retryCount: 0,
       };
+      Logger.debug(`followUp: 「${finished.name}」 remaining=${followUp.remainingTimes}/${followUp.totalTimes}`, 'scheduler');
       this.insertByPriority(followUp);
     }
 
@@ -395,19 +442,30 @@ export class Scheduler {
     this.consumeNext();
   }
 
-  /** 检查停止条件是否满足 */
-  private async checkStopCondition(cond: StopCondition, taskName: string): Promise<boolean> {
+  /** 检查停止条件是否满足（优先使用 OCR 日志中跟踪的计数，回退到 gameContext API） */
+  private async checkStopCondition(cond: StopCondition, _taskName: string): Promise<boolean> {
+    // 优先使用从后端 [UI] 日志 OCR 到的实时数据
+    if (cond.loot_count_ge != null && this.trackedLootCount != null && this.trackedLootCount >= cond.loot_count_ge) {
+      this.emitLog('info', `战利品已达 ${this.trackedLootCount}，满足停止条件 (≥${cond.loot_count_ge})`);
+      return true;
+    }
+    if (cond.ship_count_ge != null && this.trackedShipCount != null && this.trackedShipCount >= cond.ship_count_ge) {
+      this.emitLog('info', `舰船获取已达 ${this.trackedShipCount}，满足停止条件 (≥${cond.ship_count_ge})`);
+      return true;
+    }
+
+    // 回退：从 gameContext API 读取（后端计数器暂未递增，留作将来兼容）
     try {
-      const resp = await this.api.gameAcquisition();
+      const resp = await this.api.gameContext();
       if (!resp.success || !resp.data) return false;
       const data = resp.data;
 
-      if (cond.loot_count_ge != null && data.loot_count != null && data.loot_count >= cond.loot_count_ge) {
-        this.emitLog('info', `战利品已达 ${data.loot_count}/${data.loot_max ?? '?'}，满足停止条件 (≥${cond.loot_count_ge})`);
+      if (cond.loot_count_ge != null && data.dropped_loot_count != null && data.dropped_loot_count >= cond.loot_count_ge) {
+        this.emitLog('info', `战利品已达 ${data.dropped_loot_count}，满足停止条件 (≥${cond.loot_count_ge})`);
         return true;
       }
-      if (cond.ship_count_ge != null && data.ship_count != null && data.ship_count >= cond.ship_count_ge) {
-        this.emitLog('info', `舰船获取已达 ${data.ship_count}/${data.ship_max ?? '?'}，满足停止条件 (≥${cond.ship_count_ge})`);
+      if (cond.ship_count_ge != null && data.dropped_ship_count != null && data.dropped_ship_count >= cond.ship_count_ge) {
+        this.emitLog('info', `舰船获取已达 ${data.dropped_ship_count}，满足停止条件 (≥${cond.ship_count_ge})`);
         return true;
       }
       return false;
@@ -458,12 +516,34 @@ export class Scheduler {
     }
   }
 
-  /** 触发一次远征检查 — 调用后端 API 收取已完成的远征。 */
+  /** 触发一次远征检查 — 向队列插入远征任务，由调度器按优先级消费。 */
   private triggerExpeditionCheck(): void {
     this.lastExpeditionCheck = Date.now();
-    this.api.expeditionCheck().catch(() => {
-      // 定时远征检查失败不影响调度器运行
-    });
+
+    // 防止重复：已有远征任务排队或正在执行时跳过
+    if (this.currentTask?.type === 'expedition') return;
+    if (this.queue.some(t => t.type === 'expedition')) return;
+
+    const id = generateTaskId();
+    const task: SchedulerTask = {
+      id,
+      name: '远征检查',
+      type: 'expedition',
+      priority: TaskPriority.EXPEDITION,
+      request: { type: 'expedition' } as unknown as TaskRequest,
+      remainingTimes: 1,
+      totalTimes: 1,
+      maxRetries: 1,
+      retryCount: 0,
+    };
+    this.insertByPriority(task);
+    this.notifyQueueChange();
+    Logger.debug('远征定时器触发，已插入远征任务到队列', 'scheduler');
+
+    // 如果当前空闲，立即消费
+    if (!this.currentTask && this._status === 'idle') {
+      this.consumeNext();
+    }
   }
 
   // ── 内部: WebSocket 回调绑定 ──
@@ -471,6 +551,11 @@ export class Scheduler {
   private setupApiCallbacks(): void {
     this.api.setCallbacks({
       onLog: (msg) => {
+        // 解析后端出征面板 OCR 日志，跟踪战利品/舰船数量用于停止条件
+        const loot = parseUiCount(msg.message, '战利品数量');
+        const ship = parseUiCount(msg.message, '舰船数量');
+        if (loot != null) this.trackedLootCount = loot;
+        if (ship != null) this.trackedShipCount = ship;
         this.callbacks.onLog?.(msg);
       },
 

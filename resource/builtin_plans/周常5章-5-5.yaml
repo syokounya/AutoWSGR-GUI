@@ -1,0 +1,27 @@
+# 周常第5章 — 地图 5-5
+# 编队: SS*6
+# 默认复纵阵
+
+chapter: 5
+map: 5
+selected_nodes: [C, F, H, I]
+fleet_id: 1
+fight_condition: 1
+repair_mode: 1
+
+node_defaults:
+  formation: 2
+  night: false
+  proceed: true
+
+fleet_presets:
+  - name: SS*6
+    ships:
+      - { ship_type: ss }
+      - { ship_type: ss }
+      - { ship_type: ss }
+      - { ship_type: ss }
+      - { ship_type: ss }
+      - { ship_type: ss }
+
+times: 5

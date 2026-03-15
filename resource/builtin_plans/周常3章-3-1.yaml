@@ -1,0 +1,33 @@
+# 周常第3章 — 地图 3-1
+# 编队方案:
+#   1) 85工程 + T-23·改 + 2条德国驱逐
+#   2) 85工程 + 岛风·改 + 2条日本驱逐
+# 默认复纵阵
+
+chapter: 3
+map: 1
+selected_nodes: [A, B, C, E, F, H, I]
+fleet_id: 1
+fight_condition: 1
+repair_mode: 1
+
+node_defaults:
+  formation: 2
+  night: false
+  proceed: true
+
+fleet_presets:
+  - name: 85工程德驱队
+    ships:
+      - 85工程
+      - T-23·改
+      - { nation: 德国, ship_type: dd }
+      - { nation: 德国, ship_type: dd }
+  - name: 85工程日驱队
+    ships:
+      - 85工程
+      - 岛风(岛风型驱逐舰)·改
+      - { nation: 日本, ship_type: dd }
+      - { nation: 日本, ship_type: dd }
+
+times: 5

@@ -1,0 +1,35 @@
+# 周常第8章 — 地图 8-2
+# 编队方案:
+#   1) 大淀·改 + AIII + 85工程 + 潜艇
+#   2) SS*6
+# 默认复纵阵
+
+chapter: 8
+map: 2
+selected_nodes: [B, J, M]
+fleet_id: 1
+fight_condition: 1
+repair_mode: 1
+
+node_defaults:
+  formation: 2
+  night: false
+  proceed: true
+
+fleet_presets:
+  - name: 大淀AIII队
+    ships:
+      - 大淀·改
+      - AIII
+      - 85工程
+      - { ship_type: ss }
+  - name: SS*6
+    ships:
+      - { ship_type: ss }
+      - { ship_type: ss }
+      - { ship_type: ss }
+      - { ship_type: ss }
+      - { ship_type: ss }
+      - { ship_type: ss }
+
+times: 5

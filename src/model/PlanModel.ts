@@ -3,7 +3,7 @@
  * 负责从 YAML 文件解析战斗方案，并提供节点参数的查询与合并。
  */
 import * as yaml from 'js-yaml';
-import type { PlanData, NodeArgs, FleetPreset } from './types';
+import type { PlanData, NodeArgs, FleetPreset, ShipSlot, ShipFilter } from './types';
 
 export class PlanModel {
   data: PlanData;
@@ -175,9 +175,22 @@ export class PlanModel {
       if (typeof obj.name !== 'string' || !Array.isArray(obj.ships)) continue;
       presets.push({
         name: obj.name,
-        ships: (obj.ships as unknown[]).map(s => String(s)),
+        ships: (obj.ships as unknown[]).map(PlanModel.parseShipSlot),
       });
     }
     return presets.length > 0 ? presets : undefined;
+  }
+
+  /** 解析单个舰船槽位: 字符串 → 具体舰船, 对象 → ShipFilter */
+  private static parseShipSlot(raw: unknown): ShipSlot {
+    if (typeof raw === 'string') return raw;
+    if (raw && typeof raw === 'object') {
+      const obj = raw as Record<string, unknown>;
+      const filter: ShipFilter = {};
+      if (typeof obj.nation === 'string') filter.nation = obj.nation;
+      if (typeof obj.ship_type === 'string') filter.ship_type = obj.ship_type;
+      if (filter.nation || filter.ship_type) return filter;
+    }
+    return String(raw);
   }
 }

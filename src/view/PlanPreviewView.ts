@@ -3,7 +3,7 @@
  * 只接收 PlanPreviewViewObject 并将其渲染到 DOM，不做任何业务判断。
  */
 import type { PlanPreviewViewObject, NodeViewObject, MapNodeType, MapEdgeVO, FleetPresetVO } from './viewObjects';
-import { ALL_SHIPS, shipTypeLabel } from '../data/shipData';
+import { ALL_SHIPS, shipTypeLabel, isShipFilter, shipSlotLabel } from '../data/shipData';
 import type { BathRepairConfig, RepairThreshold } from '../model/types';
 
 const FORMATION_SHORT: Record<string, string> = {
@@ -202,17 +202,18 @@ export class PlanPreviewView {
     const container = document.getElementById('bath-ship-thresholds');
     if (!container) return;
 
-    // 收集选中预设的所有不重复舰船名（保持出现顺序）
+    // 收集选中预设的所有不重复舰船名（保持出现顺序，仅具体舰船）
     const shipNames: string[] = [];
     const seen = new Set<string>();
     const sorted = Array.from(this.selectedFleetPresetIndices).sort((a, b) => a - b);
     for (const idx of sorted) {
       const preset = this.currentPresets[idx];
       if (!preset) continue;
-      for (const name of preset.ships) {
-        if (!seen.has(name)) {
-          seen.add(name);
-          shipNames.push(name);
+      for (const slot of preset.ships) {
+        if (typeof slot !== 'string') continue; // 跳过模糊匹配槽位
+        if (!seen.has(slot)) {
+          seen.add(slot);
+          shipNames.push(slot);
         }
       }
     }
@@ -605,8 +606,14 @@ export class PlanPreviewView {
       shipsEl.className = 'fleet-preset-ships';
       for (const ship of preset.ships) {
         const tag = document.createElement('span');
-        tag.className = 'ship-tag';
-        tag.textContent = ship;
+        if (isShipFilter(ship)) {
+          tag.className = 'ship-tag ship-tag-filter';
+          tag.textContent = shipSlotLabel(ship);
+          tag.title = '模糊匹配: ' + shipSlotLabel(ship);
+        } else {
+          tag.className = 'ship-tag';
+          tag.textContent = ship;
+        }
         shipsEl.appendChild(tag);
       }
       item.appendChild(shipsEl);
@@ -633,11 +640,48 @@ export class PlanPreviewView {
     const name = preset?.name ?? '';
     const ships = preset?.ships ?? [];
 
+    // 导入模糊匹配所需的数据
+    const { ALL_NATIONS, TYPE_LABELS } = require('../data/shipData') as typeof import('../data/shipData');
+    const typeEntries = Object.entries(TYPE_LABELS);
+
     const overlay = document.createElement('div');
     overlay.className = 'fleet-edit-overlay';
 
     const dialog = document.createElement('div');
     dialog.className = 'fleet-edit-dialog';
+
+    // 构建每个槽位的 HTML
+    const slotsHtml = [0, 1, 2, 3, 4, 5].map(i => {
+      const slot = ships[i];
+      const isFilter = slot != null && typeof slot === 'object';
+      const shipName = typeof slot === 'string' ? slot : '';
+      const nation = isFilter ? ((slot as any).nation ?? '') : '';
+      const shipType = isFilter ? ((slot as any).ship_type ?? '') : '';
+
+      const nationOpts = `<option value="">不限</option>` + ALL_NATIONS.map(
+        (n: string) => `<option value="${this.escapeHtml(n)}"${n === nation ? ' selected' : ''}>${this.escapeHtml(n)}</option>`
+      ).join('');
+      const typeOpts = `<option value="">不限</option>` + typeEntries.map(
+        ([code, label]) => `<option value="${this.escapeHtml(code)}"${code === shipType ? ' selected' : ''}>${this.escapeHtml(label as string)}</option>`
+      ).join('');
+
+      return `
+        <div class="ship-slot-wrapper" data-slot="${i}">
+          <div class="ship-slot-header">
+            <span class="ship-slot-label">${i + 1}号位</span>
+            <button type="button" class="ship-slot-toggle btn-xs${isFilter ? ' active' : ''}" title="切换模糊匹配">🔍</button>
+          </div>
+          <div class="ship-name-mode"${isFilter ? ' style="display:none"' : ''}>
+            <input type="text" class="input fleet-edit-ship" placeholder="舰船名称" value="${this.escapeHtml(shipName)}" autocomplete="off" />
+            <div class="ship-autocomplete-list"></div>
+          </div>
+          <div class="ship-filter-mode"${isFilter ? '' : ' style="display:none"'}>
+            <select class="input fleet-edit-nation">${nationOpts}</select>
+            <select class="input fleet-edit-type">${typeOpts}</select>
+          </div>
+        </div>`;
+    }).join('');
+
     dialog.innerHTML = `
       <h3>${isNew ? '新增编队' : '编辑编队'}</h3>
       <div class="form-group">
@@ -646,14 +690,7 @@ export class PlanPreviewView {
       </div>
       <div class="form-group">
         <label>舰船（1~6号位，留空表示该位置无舰船）</label>
-        <div class="fleet-edit-ships-grid">
-          ${[0, 1, 2, 3, 4, 5].map(i => `
-            <div class="ship-input-wrapper">
-              <input type="text" class="input fleet-edit-ship" placeholder="${i + 1}号位" value="${this.escapeHtml(ships[i] ?? '')}" autocomplete="off" />
-              <div class="ship-autocomplete-list"></div>
-            </div>
-          `).join('')}
-        </div>
+        <div class="fleet-edit-ships-grid">${slotsHtml}</div>
       </div>
       <div class="fleet-edit-actions">
         <button class="btn btn-outline" id="fleet-edit-cancel">取消</button>
@@ -664,8 +701,20 @@ export class PlanPreviewView {
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
 
+    // 模式切换：指定 ↔ 模糊
+    dialog.querySelectorAll('.ship-slot-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const wrapper = btn.closest('.ship-slot-wrapper')!;
+        const nameMode = wrapper.querySelector('.ship-name-mode') as HTMLElement;
+        const filterMode = wrapper.querySelector('.ship-filter-mode') as HTMLElement;
+        const isActive = btn.classList.toggle('active');
+        nameMode.style.display = isActive ? 'none' : '';
+        filterMode.style.display = isActive ? '' : 'none';
+      });
+    });
+
     // 为每个舰船输入框绑定自动补全
-    const shipWrappers = dialog.querySelectorAll('.ship-input-wrapper');
+    const shipWrappers = dialog.querySelectorAll('.ship-name-mode');
     shipWrappers.forEach(wrapper => {
       const input = wrapper.querySelector('.fleet-edit-ship') as HTMLInputElement;
       const listEl = wrapper.querySelector('.ship-autocomplete-list') as HTMLElement;
@@ -781,11 +830,23 @@ export class PlanPreviewView {
         nameInput.focus();
         return;
       }
-      const shipInputs = dialog.querySelectorAll('.fleet-edit-ship') as NodeListOf<HTMLInputElement>;
-      const newShips: string[] = [];
-      shipInputs.forEach(inp => {
-        const v = inp.value.trim();
-        if (v) newShips.push(v);
+      const newShips: import('../model/types').ShipSlot[] = [];
+      dialog.querySelectorAll('.ship-slot-wrapper').forEach(wrapper => {
+        const toggle = wrapper.querySelector('.ship-slot-toggle')!;
+        const isFilterMode = toggle.classList.contains('active');
+        if (isFilterMode) {
+          const nation = (wrapper.querySelector('.fleet-edit-nation') as HTMLSelectElement).value;
+          const shipType = (wrapper.querySelector('.fleet-edit-type') as HTMLSelectElement).value;
+          if (nation || shipType) {
+            const filter: import('../model/types').ShipFilter = {};
+            if (nation) filter.nation = nation;
+            if (shipType) filter.ship_type = shipType;
+            newShips.push(filter);
+          }
+        } else {
+          const v = (wrapper.querySelector('.fleet-edit-ship') as HTMLInputElement).value.trim();
+          if (v) newShips.push(v);
+        }
       });
 
       const newPreset: FleetPresetVO = { name: newName, ships: newShips };

@@ -20,12 +20,23 @@ export interface NodeArgs {
   SL_when_detour_fails?: boolean;
 }
 
+/** 舰船筛选条件 (模糊匹配: 按国籍/舰种选船) */
+export interface ShipFilter {
+  /** 国籍, 如 "德国", "日本" */
+  nation?: string;
+  /** 舰种代号, 如 "dd", "ss" */
+  ship_type?: string;
+}
+
+/** 编队槽位: 具体舰船名 或 模糊筛选条件 */
+export type ShipSlot = string | ShipFilter;
+
 /** 编队预设: 一组预定义的舰船配置 */
 export interface FleetPreset {
   /** 显示名称 */
   name: string;
-  /** 舰船名列表 (按位置顺序) */
-  ships: string[];
+  /** 舰船槽位列表 (按位置顺序) */
+  ships: ShipSlot[];
 }
 
 /** Plan 文件解析后的完整数据 */

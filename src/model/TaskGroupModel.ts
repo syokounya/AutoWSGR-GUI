@@ -26,6 +26,8 @@ export interface TaskGroupItem {
   fleet_id?: number;
   /** 章节覆盖（仅 decisive 模板使用时选择） */
   chapter?: number;
+  /** 编队预设索引（plan 类型条目指定默认使用的编队预设） */
+  fleetPresetIndex?: number;
 }
 
 /** 一个任务组 */

@@ -39,7 +39,7 @@ import {
   type TaskTemplate,
 } from '../model/types';
 import { loadMapData, loadExMapData, getNodeType, isDetourNode, isNightNode } from '../model/MapDataLoader';
-import { ALL_SHIPS, shipTypeLabel, toBackendName } from '../data/shipData';
+import { ALL_SHIPS, shipTypeLabel, toBackendName, resolveFleetPreset, shipSlotLabel, isShipFilter } from '../data/shipData';
 import { Logger } from '../utils/Logger';
 
 /** 将 repair_mode（数字或数组）转换为显示文本 */
@@ -1261,6 +1261,19 @@ export class AppController {
             times: 1,
             gap: plan.data.gap ?? 0,
           };
+          // 应用存储的编队预设
+          if (item.fleetPresetIndex != null && plan.data.fleet_presets) {
+            const preset = plan.data.fleet_presets[item.fleetPresetIndex];
+            if (preset) {
+              const resolved = resolveFleetPreset(preset.ships);
+              if (resolved.length > 0) {
+                req.plan = {
+                  fleet: resolved.map(toBackendName),
+                  fleet_id: plan.data.fleet_id,
+                };
+              }
+            }
+          }
           this.scheduler.addTask(plan.mapName, 'normal_fight', req, TaskPriority.USER_TASK, times, plan.data.stop_condition);
         }
         loadedCount++;
@@ -1347,6 +1360,19 @@ export class AppController {
           times: 1,
           gap: plan.data.gap ?? 0,
         };
+        // 应用存储的编队预设
+        if (item.fleetPresetIndex != null && plan.data.fleet_presets) {
+          const preset = plan.data.fleet_presets[item.fleetPresetIndex];
+          if (preset) {
+            const resolved = resolveFleetPreset(preset.ships);
+            if (resolved.length > 0) {
+              req.plan = {
+                fleet: resolved.map(toBackendName),
+                fleet_id: plan.data.fleet_id,
+              };
+            }
+          }
+        }
         this.scheduler.addTask(plan.mapName, 'normal_fight', req, TaskPriority.USER_TASK, item.times, plan.data.stop_condition);
       }
 
@@ -1867,10 +1893,11 @@ export class AppController {
       gap: plan.data.gap ?? 0,
     };
 
-    // 如果选中了编队预设，使用第一个预设的舰船列表
+    // 如果选中了编队预设，使用第一个预设的舰船列表（解析模糊槽位）
     if (firstPreset && firstPreset.ships.length > 0) {
+      const resolved = resolveFleetPreset(firstPreset.ships);
       req.plan = {
-        fleet: firstPreset.ships.map(toBackendName),
+        fleet: resolved.map(toBackendName),
         fleet_id: plan.data.fleet_id,
       };
     }
@@ -1894,7 +1921,7 @@ export class AppController {
       fleetPresets,
       currentPresetIndex,
     );
-    Logger.debug(`executePlan: map=${plan.mapName} plan_id=${plan.fileName} times=${times} gap=${req.gap}${firstPreset ? ' fleet=' + firstPreset.ships.join(',') : ''}${fleetPresets ? ' rotation=' + fleetPresets.length + '套' : ''}`);
+    Logger.debug(`executePlan: map=${plan.mapName} plan_id=${plan.fileName} times=${times} gap=${req.gap}${firstPreset ? ' fleet=' + firstPreset.ships.map(s => shipSlotLabel(s)).join(',') : ''}${fleetPresets ? ' rotation=' + fleetPresets.length + '套' : ''}`);
 
     // 重置编队选择
     this.planView.selectedFleetPresetIndices.clear();
@@ -2975,13 +3002,17 @@ export class AppController {
   }
 
   /** 将指定方案添加到任务列表 */
-  private addPlanToTaskList(tpl: TaskTemplate, planPath: string, groupName: string): void {
+  private addPlanToTaskList(tpl: TaskTemplate, planPath: string, groupName: string, fleetPresetIndex?: number, presetName?: string): void {
     const planName = planPath.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? tpl.name;
+    const label = presetName
+      ? `${tpl.name} (${planName} · ${presetName})`
+      : `${tpl.name} (${planName})`;
     this.taskGroupModel.addItem(groupName, {
       path: planPath,
       kind: 'plan',
       times: tpl.defaultTimes ?? 1,
-      label: `${tpl.name} (${planName})`,
+      label,
+      fleetPresetIndex,
     });
   }
 
@@ -3002,22 +3033,90 @@ export class AppController {
       </div>`;
     }).join('');
 
-    const onSelect = (e: Event) => {
-      const item = (e.target as HTMLElement).closest('.plan-selector-item') as HTMLElement | null;
-      if (!item) return;
-      const idx = parseInt(item.dataset.planIdx ?? '-1');
-      if (idx < 0 || idx >= paths.length) return;
-      this.addPlanToTaskList(tpl, paths[idx], groupName);
-      this.taskGroupModel.save();
-      this.renderTaskGroup();
-      Logger.info(`模板「${tpl.name}」→ 已加入任务列表「${groupName}」（方案: ${paths[idx].split(/[\\/]/).pop()}）`);
-      cleanup();
-    };
     const onCancel = () => cleanup();
     const cleanup = () => {
       overlay.style.display = 'none';
       list.removeEventListener('click', onSelect);
       document.getElementById('btn-plan-selector-cancel')?.removeEventListener('click', onCancel);
+    };
+
+    const onSelect = async (e: Event) => {
+      const item = (e.target as HTMLElement).closest('.plan-selector-item') as HTMLElement | null;
+      if (!item) return;
+      const idx = parseInt(item.dataset.planIdx ?? '-1');
+      if (idx < 0 || idx >= paths.length) return;
+
+      const planPath = paths[idx];
+      // 尝试读取方案中的编队预设
+      const bridge = window.electronBridge;
+      if (bridge) {
+        try {
+          const content = await bridge.readFile(planPath);
+          const parsed = (await import('js-yaml')).load(content) as Record<string, unknown>;
+          const rawPresets = parsed?.fleet_presets;
+          if (Array.isArray(rawPresets) && rawPresets.length > 0) {
+            // 方案包含编队预设 → 进入编队选择阶段
+            cleanup();
+            this.showFleetPresetPicker(tpl, planPath, rawPresets, groupName);
+            return;
+          }
+        } catch { /* 忽略读取失败，直接添加 */ }
+      }
+
+      this.addPlanToTaskList(tpl, planPath, groupName);
+      this.taskGroupModel.save();
+      this.renderTaskGroup();
+      Logger.info(`模板「${tpl.name}」→ 已加入任务列表「${groupName}」（方案: ${planPath.split(/[\\/]/).pop()}）`);
+      cleanup();
+    };
+
+    list.addEventListener('click', onSelect);
+    document.getElementById('btn-plan-selector-cancel')?.addEventListener('click', onCancel);
+    overlay.style.display = 'flex';
+  }
+
+  /** 方案已选定后，显示编队预设选择弹窗 */
+  private showFleetPresetPicker(tpl: TaskTemplate, planPath: string, rawPresets: any[], groupName: string): void {
+    const overlay = document.getElementById('plan-selector-dialog')!;
+    const title = document.getElementById('plan-selector-title')!;
+    const list = document.getElementById('plan-selector-list')!;
+    const timesRow = document.getElementById('plan-selector-times-row')!;
+    timesRow.style.display = 'none';
+
+    const planName = planPath.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? '';
+    title.textContent = `「${planName}」— 选择编队预设`;
+    list.innerHTML = rawPresets.map((p: any, i: number) => {
+      const pName = p.name ?? `预设${i + 1}`;
+      const ships = Array.isArray(p.ships) ? p.ships : [];
+      const shipsHtml = ships.map((s: any) => {
+        if (typeof s === 'string') return `<span class="ship-tag">${s}</span>`;
+        const label = shipSlotLabel(s);
+        return `<span class="ship-tag ship-tag-filter">${label}</span>`;
+      }).join('');
+      return `<div class="plan-selector-item" data-plan-idx="${i}">
+        <div style="font-weight:600; margin-bottom:2px">⚓ ${pName}</div>
+        <div class="fleet-preset-ships" style="font-size:10px">${shipsHtml}</div>
+      </div>`;
+    }).join('');
+
+    const onCancel = () => cleanup();
+    const cleanup = () => {
+      overlay.style.display = 'none';
+      list.removeEventListener('click', onSelect);
+      document.getElementById('btn-plan-selector-cancel')?.removeEventListener('click', onCancel);
+    };
+
+    const onSelect = (e: Event) => {
+      const item = (e.target as HTMLElement).closest('.plan-selector-item') as HTMLElement | null;
+      if (!item) return;
+      const idx = parseInt(item.dataset.planIdx ?? '-1');
+      if (idx < 0 || idx >= rawPresets.length) return;
+      const presetName = rawPresets[idx]?.name ?? '';
+      this.addPlanToTaskList(tpl, planPath, groupName, idx, presetName);
+      this.taskGroupModel.save();
+      this.renderTaskGroup();
+      Logger.info(`模板「${tpl.name}」→ 已加入任务列表「${groupName}」（方案: ${planName}, 编队: ${presetName}）`);
+      cleanup();
     };
 
     list.addEventListener('click', onSelect);

@@ -7,15 +7,37 @@
     "createdAt": "2026-01-01T00:00:00.000Z",
     "description": "自动刷取战利品（胖次），可选择不同地图方案",
     "planPaths": [
-      "plans/9-2捞胖次.yaml",
-      "plans/7-4千伪.yaml",
-      "plans/8-5AI.yaml",
-      "plans/2-1捞胖次挂机.yaml"
+      "resource/builtin_plans/捞胖次9-2.yaml",
+      "resource/builtin_plans/捞胖次7-4.yaml",
+      "resource/builtin_plans/捞胖次8-5.yaml",
+      "resource/builtin_plans/捞胖次2-1.yaml"
     ],
     "defaultTimes": 99,
     "defaultStopCondition": {
       "loot_count_ge": 50
     }
+  },
+  {
+    "id": "builtin_weekly",
+    "name": "周常任务",
+    "type": "normal_fight",
+    "builtin": true,
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "description": "每周战斗任务（第1-9章），选择对应章节方案执行",
+    "planPaths": [
+      "resource/builtin_plans/周常1章-1-2.yaml",
+      "resource/builtin_plans/周常2章-2-1.yaml",
+      "resource/builtin_plans/周常3章-3-1.yaml",
+      "resource/builtin_plans/周常3章-3-3.yaml",
+      "resource/builtin_plans/周常4章-4-1.yaml",
+      "resource/builtin_plans/周常5章-5-5.yaml",
+      "resource/builtin_plans/周常6章-6-4.yaml",
+      "resource/builtin_plans/周常6章-6-3.yaml",
+      "resource/builtin_plans/周常7章-7-4.yaml",
+      "resource/builtin_plans/周常8章-8-2.yaml",
+      "resource/builtin_plans/周常9章-9-2.yaml"
+    ],
+    "defaultTimes": 5
   },
   {
     "id": "builtin_exercise",
@@ -39,11 +61,11 @@
   },
   {
     "id": "builtin_decisive_6",
-    "name": "决战第6章",
+    "name": "决战",
     "type": "decisive",
     "builtin": true,
     "createdAt": "2026-01-01T00:00:00.000Z",
-    "description": "自动完成决战第6章",
+    "description": "自动完成决战",
     "chapter": 6,
     "level1": [],
     "level2": [],

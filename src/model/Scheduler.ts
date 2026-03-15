@@ -23,6 +23,7 @@ import {
 import type { StopCondition, BathRepairConfig, FleetPreset } from './types';
 import { Logger } from '../utils/Logger';
 import { RepairManager } from './RepairManager';
+import { resolveFleetPreset } from '../data/shipData';
 
 // ════════════════════════════════════════
 // 任务队列项
@@ -680,7 +681,8 @@ export class Scheduler {
 
     const req = task.request;
     if (req.type === 'normal_fight' || req.type === 'event_fight') {
-      const fleet = preset.ships.map(n => n.endsWith('·改') ? n.slice(0, -2) : n);
+      const resolved = resolveFleetPreset(preset.ships);
+      const fleet = resolved.map(n => n.endsWith('·改') ? n.slice(0, -2) : n);
       if (req.plan) {
         req.plan.fleet = fleet;
       } else {

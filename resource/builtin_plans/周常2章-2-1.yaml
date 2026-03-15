@@ -1,0 +1,40 @@
+# 周常第2章 — 地图 2-1
+# 编队方案:
+#   1) SS*4
+#   2) T-23·改 + 3条德国驱逐
+#   3) 岛风·改 + 3条日本驱逐
+# 默认复纵阵
+
+chapter: 2
+map: 1
+selected_nodes: [B, D, F]
+fleet_id: 1
+fight_condition: 1
+repair_mode: 1
+
+node_defaults:
+  formation: 2
+  night: false
+  proceed: true
+
+fleet_presets:
+  - name: SS*4
+    ships:
+      - { ship_type: ss }
+      - { ship_type: ss }
+      - { ship_type: ss }
+      - { ship_type: ss }
+  - name: T-23德驱队
+    ships:
+      - T-23·改
+      - { nation: 德国, ship_type: dd }
+      - { nation: 德国, ship_type: dd }
+      - { nation: 德国, ship_type: dd }
+  - name: 岛风日驱队
+    ships:
+      - 岛风(岛风型驱逐舰)·改
+      - { nation: 日本, ship_type: dd }
+      - { nation: 日本, ship_type: dd }
+      - { nation: 日本, ship_type: dd }
+
+times: 5

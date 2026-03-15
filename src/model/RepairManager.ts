@@ -13,7 +13,7 @@
  */
 
 import type { ApiClient, ShipData } from './ApiClient';
-import type { BathRepairConfig, RepairThreshold } from './types';
+import type { BathRepairConfig, RepairThreshold, ShipSlot } from './types';
 import { Logger } from '../utils/Logger';
 import { toBackendName } from '../data/shipData';
 
@@ -194,11 +194,14 @@ export class RepairManager {
    * @param skipIndex 跳过的预设索引（当前正在使用的）
    * @returns 可用预设的索引，或 -1（全部有船在泡澡）
    */
-  findHealthyPreset(presets: Array<{ name: string; ships: string[] }>, skipIndex: number): number {
+  findHealthyPreset(presets: Array<{ name: string; ships: ShipSlot[] }>, skipIndex: number): number {
     for (let i = 0; i < presets.length; i++) {
       if (i === skipIndex) continue;
       const preset = presets[i];
-      const hasShipInBath = preset.ships.some(name => this.bathingShips.has(toBackendName(name)));
+      const hasShipInBath = preset.ships.some(slot => {
+        if (typeof slot !== 'string') return false; // 模糊槽位不视为泡澡中
+        return this.bathingShips.has(toBackendName(slot));
+      });
       if (!hasShipInBath) {
         return i;
       }

@@ -109,7 +109,7 @@ export interface PlanPreviewViewObject {
 /** 编队预设 VO */
 export interface FleetPresetVO {
   name: string;
-  ships: string[];
+  ships: import('../model/types').ShipSlot[];
 }
 
 // ════════════════════════════════════════

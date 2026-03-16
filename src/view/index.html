@@ -87,7 +87,7 @@
               <p class="tg-empty">暂无任务。可从方案预览页的模板库「加入列表」，或点击下方「从文件添加」。</p>
             </div>
             <div class="task-group-actions">
-              <button class="btn btn-primary btn-small" id="btn-tg-load-all">全部开始执行</button>
+              <button class="btn btn-primary btn-small" id="btn-tg-load-all">全部加入队列</button>
               <button class="btn btn-small" id="btn-tg-add-file">从文件添加</button>
               <button class="btn btn-small" id="btn-tg-export" title="导出任务列表为文件">导出列表</button>
               <button class="btn btn-small" id="btn-tg-import" title="从文件导入任务列表">导入列表</button>
@@ -193,6 +193,7 @@
             <input type="number" id="plan-selector-times" class="input" min="1" max="99" value="1" style="width:80px">
           </div>
           <div class="modal-actions">
+            <button class="btn btn-primary" id="btn-plan-selector-confirm" style="display:none">确认</button>
             <button class="btn" id="btn-plan-selector-cancel">取消</button>
           </div>
         </div>

@@ -25,6 +25,9 @@ const DEFAULT_SETTINGS: UserSettings = {
     auto_decisive: false,
     decisive_ticket_reserve: 0,
     decisive_template_id: '',
+    auto_loot: false,
+    loot_plan_index: 0,
+    loot_stop_count: 50,
   },
 };
 

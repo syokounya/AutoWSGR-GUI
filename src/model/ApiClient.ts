@@ -209,6 +209,7 @@ export interface DecisiveReq {
   level1?: string[];
   level2?: string[];
   flagship_priority?: string[];
+  use_quick_repair?: boolean;
 }
 
 export type TaskRequest =

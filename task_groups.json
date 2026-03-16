@@ -1,9 +1,85 @@
 {
-  "activeGroup": "干了xdm",
+  "activeGroup": "捞胖次",
   "groups": [
     {
-      "name": "干了xdm",
-      "items": []
+      "name": "捞胖次",
+      "items": [
+        {
+          "path": "resource/builtin_plans/捞胖次9-2.yaml",
+          "kind": "plan",
+          "times": 99,
+          "label": "刷胖次 (捞胖次9-2 · 三响岛风)",
+          "fleetPresetIndex": 2
+        }
+      ]
+    },
+    {
+      "name": "周常",
+      "items": [
+        {
+          "path": "resource/builtin_plans/周常1章-1-2.yaml",
+          "kind": "plan",
+          "times": 5,
+          "label": "周常任务 (周常1章-1-2 · 4驱逐)",
+          "fleetPresetIndex": 0
+        },
+        {
+          "path": "resource/builtin_plans/周常2章-2-1.yaml",
+          "kind": "plan",
+          "times": 5,
+          "label": "周常任务 (周常2章-2-1 · T-23德驱队)",
+          "fleetPresetIndex": 1
+        },
+        {
+          "path": "resource/builtin_plans/周常3章-3-1.yaml",
+          "kind": "plan",
+          "times": 5,
+          "label": "周常任务 (周常3章-3-1 · 85工程德驱队)",
+          "fleetPresetIndex": 0
+        },
+        {
+          "path": "resource/builtin_plans/周常4章-4-1.yaml",
+          "kind": "plan",
+          "times": 5,
+          "label": "周常任务 (周常4章-4-1 · 85工程德驱队)",
+          "fleetPresetIndex": 0
+        },
+        {
+          "path": "resource/builtin_plans/周常5章-5-5.yaml",
+          "kind": "plan",
+          "times": 5,
+          "label": "周常任务 (周常5章-5-5 · SS*6)",
+          "fleetPresetIndex": 0
+        },
+        {
+          "path": "resource/builtin_plans/周常6章-6-3.yaml",
+          "kind": "plan",
+          "times": 5,
+          "label": "周常任务 (周常6章-6-3 · SS*6)",
+          "fleetPresetIndex": 0
+        },
+        {
+          "path": "resource/builtin_plans/周常7章-7-4.yaml",
+          "kind": "plan",
+          "times": 5,
+          "label": "周常任务 (周常7章-7-4 · SS*6)",
+          "fleetPresetIndex": 0
+        },
+        {
+          "path": "resource/builtin_plans/周常8章-8-2.yaml",
+          "kind": "plan",
+          "times": 5,
+          "label": "周常任务 (周常8章-8-2 · SS*6)",
+          "fleetPresetIndex": 1
+        },
+        {
+          "path": "resource/builtin_plans/周常9章-9-2.yaml",
+          "kind": "plan",
+          "times": 5,
+          "label": "周常任务 (周常9章-9-2 · 三响岛风)",
+          "fleetPresetIndex": 2
+        }
+      ]
     }
   ]
 }

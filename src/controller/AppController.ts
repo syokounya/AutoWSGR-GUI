@@ -137,6 +137,7 @@ export class AppController {
   private cronScheduler: CronScheduler;
   private pendingExerciseTaskId: string | null = null;
   private pendingBattleTaskId: string | null = null;
+  private pendingLootTaskId: string | null = null;
   private wsConnected = false;
   private expeditionTimerText = '--:--';
   private currentProgress = '';
@@ -176,6 +177,9 @@ export class AppController {
       battleType: cfg.battle_type,
       battleTimes: cfg.battle_times,
       autoNormalFight: cfg.auto_normal_fight,
+      autoLoot: cfg.auto_loot,
+      lootPlanIndex: cfg.loot_plan_index,
+      lootStopCount: cfg.loot_stop_count,
     });
   }
 
@@ -259,6 +263,9 @@ export class AppController {
       battleType: da.battle_type,
       battleTimes: da.battle_times,
       autoNormalFight: da.auto_normal_fight,
+      autoLoot: da.auto_loot,
+      lootPlanIndex: da.loot_plan_index,
+      lootStopCount: da.loot_stop_count,
     });
     await this.detectAndApplyEmulator();
     Logger.debug('模拟器检测完成');
@@ -1319,6 +1326,7 @@ export class AppController {
           level1: tpl.level1 ?? [],
           level2: tpl.level2 ?? [],
           flagship_priority: tpl.flagship_priority ?? [],
+          use_quick_repair: tpl.use_quick_repair,
         };
         this.scheduler.addTask(item.label || tpl.name, 'decisive', req, TaskPriority.USER_TASK, 1);
         break;
@@ -1501,6 +1509,10 @@ export class AppController {
           this.cronScheduler.markBattleHandled();
           this.pendingBattleTaskId = null;
         }
+        if (taskId === this.pendingLootTaskId) {
+          this.cronScheduler.markLootHandled();
+          this.pendingLootTaskId = null;
+        }
         this.renderMain();
       },
 
@@ -1576,10 +1588,62 @@ export class AppController {
         // scheduled tasks are handled via plan re-import (future extension)
       },
 
+      onLootDue: (planIndex, stopCount) => {
+        this.autoLoadLootTask(planIndex, stopCount);
+      },
+
       onLog: (level, message) => {
         Logger.logLevel(level, message);
       },
     });
+  }
+
+  /** 自动战利品：加载内置捞胖次方案并加入队列 */
+  private async autoLoadLootTask(planIndex: number, stopCount: number): Promise<void> {
+    const tpl = this.templateModel.get('builtin_farm_loot');
+    if (!tpl) {
+      Logger.error('自动战利品：未找到内置 builtin_farm_loot 模板');
+      this.cronScheduler.clearLootPending();
+      return;
+    }
+    const paths = tpl.planPaths ?? [];
+    const planPath = paths[planIndex] ?? paths[0];
+    if (!planPath) {
+      Logger.error('自动战利品：模板缺少方案文件');
+      this.cronScheduler.clearLootPending();
+      return;
+    }
+    const bridge = window.electronBridge;
+    if (!bridge) {
+      this.cronScheduler.clearLootPending();
+      return;
+    }
+    try {
+      const content = await bridge.readFile(planPath);
+      const plan = PlanModel.fromYaml(content, planPath);
+      const req: NormalFightReq = {
+        type: 'normal_fight',
+        plan_id: plan.fileName,
+        times: 1,
+        gap: plan.data.gap ?? 0,
+      };
+      const stopCondition = { loot_count_ge: stopCount };
+      const id = this.scheduler.addTask(
+        `自动刷胖次·${plan.mapName}`,
+        'normal_fight',
+        req,
+        TaskPriority.DAILY,
+        99,
+        stopCondition,
+      );
+      this.pendingLootTaskId = id;
+      Logger.info(`自动战利品已加入队列 (${plan.mapName}, 战利品≥${stopCount}时停止)`);
+      this.scheduler.startConsuming();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Logger.error(`自动战利品加载失败: ${msg}`);
+      this.cronScheduler.clearLootPending();
+    }
   }
 
   // ════════════════════════════════════════
@@ -1737,6 +1801,7 @@ export class AppController {
         (document.getElementById('tp-decisive-level1') as HTMLTextAreaElement).value = (preset.level1 ?? []).join('\n');
         (document.getElementById('tp-decisive-level2') as HTMLTextAreaElement).value = (preset.level2 ?? []).join('\n');
         (document.getElementById('tp-decisive-flagship') as HTMLTextAreaElement).value = (preset.flagship_priority ?? []).join('\n');
+        (document.getElementById('tp-decisive-quick-repair') as HTMLInputElement).checked = preset.use_quick_repair !== false;
         break;
       }
       case 'normal_fight':
@@ -1805,6 +1870,7 @@ export class AppController {
           level1: parseLines('tp-decisive-level1'),
           level2: parseLines('tp-decisive-level2'),
           flagship_priority: parseLines('tp-decisive-flagship'),
+          use_quick_repair: (document.getElementById('tp-decisive-quick-repair') as HTMLInputElement).checked,
         };
         break;
       }
@@ -2377,6 +2443,9 @@ export class AppController {
       autoDecisive: cfg.daily_automation.auto_decisive,
       decisiveTicketReserve: cfg.daily_automation.decisive_ticket_reserve,
       decisiveTemplateId: cfg.daily_automation.decisive_template_id,
+      autoLoot: cfg.daily_automation.auto_loot,
+      lootPlanIndex: cfg.daily_automation.loot_plan_index,
+      lootStopCount: cfg.daily_automation.loot_stop_count,
       themeMode: this.getThemeMode(),
       accentColor: this.getAccentColor(),
       debugMode: localStorage.getItem('debugMode') === 'true',
@@ -2416,6 +2485,9 @@ export class AppController {
         auto_decisive: collected.autoDecisive,
         decisive_ticket_reserve: collected.decisiveTicketReserve,
         decisive_template_id: collected.decisiveTemplateId,
+        auto_loot: collected.autoLoot,
+        loot_plan_index: collected.lootPlanIndex,
+        loot_stop_count: collected.lootStopCount,
       },
     });
 
@@ -2428,6 +2500,9 @@ export class AppController {
       battleType: da.battle_type,
       battleTimes: da.battle_times,
       autoNormalFight: da.auto_normal_fight,
+      autoLoot: da.auto_loot,
+      lootPlanIndex: da.loot_plan_index,
+      lootStopCount: da.loot_stop_count,
     });
 
     // 同步远征检查间隔
@@ -2659,6 +2734,7 @@ export class AppController {
         if (tpl.level1?.length) (document.getElementById('tpl-decisive-level1') as HTMLTextAreaElement).value = tpl.level1.join('\n');
         if (tpl.level2?.length) (document.getElementById('tpl-decisive-level2') as HTMLTextAreaElement).value = tpl.level2.join('\n');
         if (tpl.flagship_priority?.length) (document.getElementById('tpl-decisive-flagship') as HTMLTextAreaElement).value = tpl.flagship_priority.join('\n');
+        (document.getElementById('tpl-decisive-quick-repair') as HTMLInputElement).checked = tpl.use_quick_repair !== false;
         break;
       }
     }
@@ -2937,6 +3013,7 @@ export class AppController {
         partial.level1 = parseLines('tpl-decisive-level1');
         partial.level2 = parseLines('tpl-decisive-level2');
         partial.flagship_priority = parseLines('tpl-decisive-flagship');
+        partial.use_quick_repair = (document.getElementById('tpl-decisive-quick-repair') as HTMLInputElement).checked;
         break;
       }
     }

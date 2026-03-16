@@ -20,6 +20,9 @@ export class ConfigView {
   private autoDecisive: HTMLInputElement;
   private decisiveTicketReserve: HTMLInputElement;
   private decisiveTemplate: HTMLSelectElement;
+  private autoLoot: HTMLInputElement;
+  private lootPlan: HTMLSelectElement;
+  private lootStopCount: HTMLInputElement;
   private themeMode: HTMLSelectElement;
   private accentColor: HTMLInputElement;
   private accentLabel: HTMLElement;
@@ -41,6 +44,9 @@ export class ConfigView {
     this.autoDecisive = document.getElementById('cfg-auto-decisive') as HTMLInputElement;
     this.decisiveTicketReserve = document.getElementById('cfg-decisive-ticket-reserve') as HTMLInputElement;
     this.decisiveTemplate = document.getElementById('cfg-decisive-template') as HTMLSelectElement;
+    this.autoLoot = document.getElementById('cfg-auto-loot') as HTMLInputElement;
+    this.lootPlan = document.getElementById('cfg-loot-plan') as HTMLSelectElement;
+    this.lootStopCount = document.getElementById('cfg-loot-stop-count') as HTMLInputElement;
     this.themeMode = document.getElementById('cfg-theme-mode') as HTMLSelectElement;
     this.accentColor = document.getElementById('cfg-accent-color') as HTMLInputElement;
     this.accentLabel = document.getElementById('cfg-accent-label')!;
@@ -70,6 +76,9 @@ export class ConfigView {
     this.decisiveTicketReserve.value = String(vo.decisiveTicketReserve);
     // 决战模板下拉列表由 Controller 填充 options
     this.decisiveTemplate.value = vo.decisiveTemplateId;
+    this.autoLoot.checked = vo.autoLoot;
+    this.lootPlan.value = String(vo.lootPlanIndex);
+    this.lootStopCount.value = String(vo.lootStopCount);
     this.themeMode.value = vo.themeMode;
     this.accentColor.value = vo.accentColor;
     this.accentLabel.textContent = vo.accentColor;
@@ -94,6 +103,9 @@ export class ConfigView {
       autoDecisive: this.autoDecisive.checked,
       decisiveTicketReserve: Math.max(0, Number(this.decisiveTicketReserve.value) || 0),
       decisiveTemplateId: this.decisiveTemplate.value,
+      autoLoot: this.autoLoot.checked,
+      lootPlanIndex: Number(this.lootPlan.value) || 0,
+      lootStopCount: Math.max(1, Math.min(50, Number(this.lootStopCount.value) || 50)),
       themeMode: this.themeMode.value as 'dark' | 'light' | 'system',
       accentColor: this.accentColor.value,
       debugMode: this.debugMode.checked,

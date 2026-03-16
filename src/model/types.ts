@@ -87,6 +87,9 @@ export interface DailyAutomation {
   auto_decisive: boolean;
   decisive_ticket_reserve: number;
   decisive_template_id: string;
+  auto_loot: boolean;
+  loot_plan_index: number;       // builtin_farm_loot 中选择的方案索引
+  loot_stop_count: number;       // 战利品达到此数量时停止
 }
 
 export interface UserSettings {
@@ -151,6 +154,8 @@ export interface TaskPreset {
   level1?: string[];
   level2?: string[];
   flagship_priority?: string[];
+  /** 决战是否启用快修（桶修） */
+  use_quick_repair?: boolean;
   // 停止条件
   stop_condition?: StopCondition;
   /** 定时触发时间 "HH:MM" 格式 */
@@ -193,6 +198,8 @@ export interface TaskTemplate {
   level1?: string[];
   level2?: string[];
   flagship_priority?: string[];
+  /** 决战是否启用快修（桶修） */
+  use_quick_repair?: boolean;
 
   // 默认运行时参数
   defaultTimes?: number;

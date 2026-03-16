@@ -132,6 +132,9 @@ export interface ConfigViewObject {
   autoDecisive: boolean;
   decisiveTicketReserve: number;
   decisiveTemplateId: string;
+  autoLoot: boolean;
+  lootPlanIndex: number;
+  lootStopCount: number;
   themeMode: 'dark' | 'light' | 'system';
   accentColor: string;
   debugMode: boolean;

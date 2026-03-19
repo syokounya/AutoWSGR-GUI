@@ -10,6 +10,13 @@
           "times": 99,
           "label": "刷胖次 (捞胖次9-2 · 三响岛风)",
           "fleetPresetIndex": 2
+        },
+        {
+          "templateId": "builtin_exercise",
+          "kind": "template",
+          "times": 1,
+          "label": "自动演习 (第 4 舰队)",
+          "fleet_id": 4
         }
       ]
     },

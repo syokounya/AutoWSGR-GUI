@@ -171,7 +171,11 @@ export class AppController {
     this.taskGroupModel = new TaskGroupModel();
     this.templateModel = new TemplateModel();
 
-    const port = window.electronBridge?.getBackendPort?.() ?? 8438;
+    const rawPort = window.electronBridge?.getBackendPort?.();
+    let port = Number(rawPort);
+    if (!Number.isFinite(port) || port <= 0 || port > 65535) {
+      port = 8438;
+    }
     this.api = new ApiClient(`http://localhost:${port}`);
     this.scheduler = new Scheduler(this.api);
 

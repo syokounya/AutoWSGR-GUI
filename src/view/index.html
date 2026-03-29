@@ -2,8 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://localhost:8000 ws://localhost:8000">
+  <!-- CSP 由 Electron 主进程动态注入，端口跟随 BACKEND_PORT 配置 -->
   <title>WSGR GUI</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -543,6 +542,16 @@
 
         <div class="form-group">
           <label><input type="checkbox" id="cfg-debug-mode"> 调试模式（显示全部日志）</label>
+        </div>
+
+        <hr class="card-divider">
+
+        <div class="form-group">
+          <label>后端端口</label>
+          <div class="input-row" style="align-items:center">
+            <input type="number" id="cfg-backend-port" class="input" min="1" max="65535" value="8438" style="width:120px">
+            <span class="config-hint" style="margin:0;font-size:12px">修改后需重启生效</span>
+          </div>
         </div>
       </div>
 

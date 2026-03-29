@@ -813,7 +813,6 @@ async function autoUpdateAutowsgr(pythonCmd: string): Promise<string | null> {
         '--target', targetDir,
         'setuptools',
         'autowsgr',
-        'airtest-openwsgr',
       ], {
         cwd: appRoot(),
         windowsHide: true,

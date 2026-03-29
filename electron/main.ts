@@ -382,7 +382,15 @@ ipcMain.on('get-backend-port-sync', (event) => {
 });
 
 ipcMain.handle('set-backend-port', (_event, port: number) => {
-  writeGuiSettings({ backend_port: port });
+  // 防御性校验：仅在端口为有限数值且位于合法范围时才写入设置
+  if (typeof port !== 'number' || !Number.isFinite(port)) {
+    return;
+  }
+  const normalizedPort = Math.trunc(port);
+  if (normalizedPort < 1 || normalizedPort > 65535) {
+    return;
+  }
+  writeGuiSettings({ backend_port: normalizedPort });
 });
 
 ipcMain.on('get-python-path-sync', (event) => {

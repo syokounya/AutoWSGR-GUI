@@ -96,6 +96,8 @@ interface ElectronBridge {
   onBackendLog: (callback: (line: string) => void) => void;
   onSetupLog: (callback: (text: string) => void) => void;
   getAppVersion: () => string;
+  getBackendPort: () => number;
+  setBackendPort: (port: number) => Promise<void>;
 }
 
 declare global {
@@ -166,7 +168,8 @@ export class AppController {
     this.taskGroupModel = new TaskGroupModel();
     this.templateModel = new TemplateModel();
 
-    this.api = new ApiClient();
+    const port = window.electronBridge?.getBackendPort?.() ?? 8438;
+    this.api = new ApiClient(`http://localhost:${port}`);
     this.scheduler = new Scheduler(this.api);
 
     const cfg = this.configModel.current.daily_automation;
@@ -596,22 +599,25 @@ export class AppController {
   private async refreshAdbStatus(): Promise<void> {
     const el = document.getElementById('cfg-adb-status');
     if (!el) return;
-    const bridge = window.electronBridge;
-    if (!bridge?.checkAdbDevices) return;
     el.textContent = '检测中…';
     el.className = 'adb-status adb-status-unknown';
     try {
-      const devices = await bridge.checkAdbDevices();
-      const online = devices.filter(d => d.status === 'device');
-      if (online.length > 0) {
-        el.textContent = `在线 (${online.map(d => d.serial).join(', ')})`;
-        el.className = 'adb-status adb-status-online';
+      const res = await this.api.emulatorDevices();
+      if (res.success && Array.isArray(res.data)) {
+        const online = res.data.filter(d => d.status === 'device');
+        if (online.length > 0) {
+          el.textContent = `在线 (${online.map(d => d.serial).join(', ')})`;
+          el.className = 'adb-status adb-status-online';
+        } else {
+          el.textContent = '未发现在线设备';
+          el.className = 'adb-status adb-status-offline';
+        }
       } else {
-        el.textContent = '未发现在线设备';
+        el.textContent = res.error || '检测失败';
         el.className = 'adb-status adb-status-offline';
       }
     } catch {
-      el.textContent = '检测失败';
+      el.textContent = '检测失败（后端未启动？）';
       el.className = 'adb-status adb-status-offline';
     }
   }
@@ -2449,6 +2455,7 @@ export class AppController {
       themeMode: this.getThemeMode(),
       accentColor: this.getAccentColor(),
       debugMode: localStorage.getItem('debugMode') === 'true',
+      backendPort: window.electronBridge?.getBackendPort?.() ?? 8438,
     };
     this.configView.render(vo);
 
@@ -2465,6 +2472,11 @@ export class AppController {
     localStorage.setItem('debugMode', String(collected.debugMode));
     this.mainView.setDebugMode(collected.debugMode);
     this.applyTheme();
+
+    // 保存后端端口（修改后需重启生效）
+    if (window.electronBridge?.setBackendPort) {
+      await window.electronBridge.setBackendPort(collected.backendPort);
+    }
 
     this.configModel.update({
       emulator: {

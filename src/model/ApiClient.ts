@@ -3,7 +3,7 @@
  * 封装所有 REST 调用和 WebSocket 连接管理。
  */
 
-const DEFAULT_BASE_URL = 'http://localhost:8000';
+const DEFAULT_BASE_URL = 'http://localhost:8438';
 const WS_RECONNECT_DELAY = 3000;
 
 import { Logger } from '../utils/Logger';
@@ -311,6 +311,10 @@ export class ApiClient {
 
   async systemStatus(): Promise<ApiResponse<SystemStatus>> {
     return this.request('GET', '/api/system/status');
+  }
+
+  async emulatorDevices(): Promise<ApiResponse<{ serial: string; status: string }[]>> {
+    return this.request('GET', '/api/system/emulator/devices', undefined, 15000);
   }
 
   // ── 任务执行 ──

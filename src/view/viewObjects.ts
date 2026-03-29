@@ -138,4 +138,5 @@ export interface ConfigViewObject {
   themeMode: 'dark' | 'light' | 'system';
   accentColor: string;
   debugMode: boolean;
+  backendPort: number;
 }

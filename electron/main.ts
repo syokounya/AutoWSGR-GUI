@@ -11,6 +11,43 @@ import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater';
 
 const execAsync = promisify(exec);
 
+/** GUI 设置文件路径（延迟到 app ready 后才有效，先用函数） */
+function guiSettingsPath(): string {
+  return path.join(appRoot(), 'gui_settings.json');
+}
+
+/** 读取 GUI 设置 */
+function readGuiSettings(): Record<string, unknown> {
+  try {
+    const p = guiSettingsPath();
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf-8'));
+    }
+  } catch { /* ignore */ }
+  return {};
+}
+
+/** 写入 GUI 设置（合并） */
+function writeGuiSettings(patch: Record<string, unknown>): void {
+  const cur = readGuiSettings();
+  Object.assign(cur, patch);
+  fs.writeFileSync(guiSettingsPath(), JSON.stringify(cur, null, 2), 'utf-8');
+}
+
+/** 后端端口：环境变量 > gui_settings.json > 默认 8438 */
+function getBackendPort(): number {
+  if (process.env.AUTOWSGR_PORT) {
+    return parseInt(process.env.AUTOWSGR_PORT, 10);
+  }
+  const settings = readGuiSettings();
+  if (typeof settings.backend_port === 'number' && settings.backend_port > 0 && settings.backend_port < 65536) {
+    return settings.backend_port;
+  }
+  return 8438;
+}
+
+const BACKEND_PORT = getBackendPort();
+
 let mainWindow: BrowserWindow | null = null;
 
 /** 是否处于打包后的生产模式 */
@@ -92,6 +129,18 @@ function createWindow(): BrowserWindow {
 
   const appDir = app.getAppPath();
   const htmlPath = path.join(appDir, 'src', 'view', 'index.html');
+
+  // 根据 BACKEND_PORT 动态注入 CSP
+  win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          `default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://localhost:${BACKEND_PORT} ws://localhost:${BACKEND_PORT}`
+        ],
+      },
+    });
+  });
 
   win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     const msg = `Page load failed!\nCode: ${errorCode}\nDesc: ${errorDescription}\nURL: ${validatedURL}\nPath: ${htmlPath}`;
@@ -310,6 +359,14 @@ ipcMain.handle('check-adb-devices', async () => {
 
 ipcMain.on('get-app-version-sync', (event) => {
   event.returnValue = app.getVersion();
+});
+
+ipcMain.on('get-backend-port-sync', (event) => {
+  event.returnValue = BACKEND_PORT;
+});
+
+ipcMain.handle('set-backend-port', (_event, port: number) => {
+  writeGuiSettings({ backend_port: port });
 });
 
 ipcMain.handle('get-app-root', () => {
@@ -781,7 +838,7 @@ async function autoUpdateAutowsgr(pythonCmd: string): Promise<string | null> {
       `sys.path.insert(0, r'${spFwd}')`,
       `site.addsitedir(r'${spFwd}')`,
       'missing = []',
-      "for m in ['airtest', 'fastapi', 'uvicorn']:",
+      "for m in ['fastapi', 'uvicorn']:",
       '    try: __import__(m)',
       '    except Exception: missing.append(m)',
       'print(json.dumps(missing))',
@@ -796,9 +853,7 @@ async function autoUpdateAutowsgr(pythonCmd: string): Promise<string | null> {
       const missing: string[] = JSON.parse(verifyOut.trim());
 
       if (missing.length > 0) {
-        // 模块名→pip 包名映射 (airtest 模块由 airtest-openwsgr 提供)
-        const modToPkg: Record<string, string> = { airtest: 'airtest-openwsgr' };
-        const pkgs = missing.map(m => modToPkg[m] ?? m);
+        const pkgs = [...missing];
         sendProgress(`升级后缺少依赖: ${missing.join(', ')}，正在补装…`);
         const fixCode = await new Promise<number>((resolve) => {
           const proc = spawn(pythonCmd, [
@@ -929,7 +984,7 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
     'sys.path.insert(0, sp)',
     'site.addsitedir(sp)',   // 处理 .pth 文件，与后端启动保持一致
     'r = {}',
-    "for p in ['uvicorn', 'fastapi', 'airtest']:",
+    "for p in ['uvicorn', 'fastapi']:",
     '    try:',
     '        __import__(p); r[p] = True',
     '    except Exception:',
@@ -950,7 +1005,7 @@ async function checkEnvironment(): Promise<EnvCheckResult> {
     try { fs.unlinkSync(checkScript); } catch { /* ignore */ }
     const depResult = JSON.parse(depOut.trim());
 
-    for (const pkg of ['uvicorn', 'fastapi', 'airtest']) {
+    for (const pkg of ['uvicorn', 'fastapi']) {
       if (depResult[pkg]) {
         sendProgress(`  ${pkg} \u2713`);
       } else {
@@ -1139,7 +1194,6 @@ async function installDependencies(pythonCmd: string): Promise<{ success: boolea
       '--upgrade',
       'setuptools',         // provides distutils (removed in Python 3.12)
       'autowsgr',
-      'airtest-openwsgr',   // autowsgr 依赖此 fork，pip 依赖解析可能跳过，需显式声明
     ], {
       cwd,
       windowsHide: true,
@@ -1179,7 +1233,6 @@ function pullUpdates(): Promise<{ success: boolean; output: string }> {
       '--upgrade',
       'setuptools',
       'autowsgr',
-      'airtest-openwsgr',
     ], {
       cwd: appRoot(),
       windowsHide: true,
@@ -1258,7 +1311,8 @@ async function startBackend(): Promise<void> {
     `sys.path.insert(0, sp)`,
     `site.addsitedir(sp)`,  // 处理 .pth 文件，激活 _distutils_hack
     `import uvicorn`,
-    `uvicorn.run('autowsgr.server.main:app', host='127.0.0.1', port=8000)`,
+    `uvicorn.run('autowsgr.server.main:app', host='127.0.0.1', port=${BACKEND_PORT})`,
+
   ].join('; ');
 
   // 将内置 ADB 目录加入 PATH，使后端 shutil.which('adb') 能找到

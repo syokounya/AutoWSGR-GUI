@@ -8,6 +8,14 @@ contextBridge.exposeInMainWorld('electronBridge', {
     return ipcRenderer.sendSync('get-app-version-sync') as string;
   },
 
+  getBackendPort: () => {
+    return ipcRenderer.sendSync('get-backend-port-sync') as number;
+  },
+
+  setBackendPort: (port: number) => {
+    return ipcRenderer.invoke('set-backend-port', port);
+  },
+
   openDirectoryDialog: (title?: string) => {
     return ipcRenderer.invoke('open-directory-dialog', title);
   },

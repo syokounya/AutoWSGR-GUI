@@ -1,0 +1,92 @@
+import type { MapNodeType } from '../../types/view';
+import { NODE_TYPE_ICON, NODE_TYPE_ICON_NIGHT, NODE_TYPE_NAME, escapeHtml } from './MapView';
+
+export class NodeEditorView {
+  private editorEl: HTMLElement;
+  private editorIdEl: HTMLElement;
+  private placeholderEl: HTMLElement;
+  private infoEl: HTMLElement;
+
+  constructor() {
+    this.editorEl = document.getElementById('node-editor')!;
+    this.editorIdEl = document.getElementById('node-editor-id')!;
+    this.placeholderEl = document.getElementById('node-editor-placeholder')!;
+    this.infoEl = document.getElementById('node-info')!;
+  }
+
+  show(nodeId: string, nodeType: MapNodeType, args: { formation: number; night: boolean; proceed: boolean; enemyRules: string }, mapNight = false): void {
+    this.infoEl.style.display = 'none';
+
+    const isNightBattle = mapNight && nodeType === 'Normal';
+    const icon = isNightBattle ? NODE_TYPE_ICON_NIGHT : (NODE_TYPE_ICON[nodeType] || '');
+    const typeName = isNightBattle ? '夜战点' : NODE_TYPE_NAME[nodeType];
+    const typeCls = isNightBattle ? 'node-type-night' : `node-type-${nodeType.toLowerCase()}`;
+    const headerEl = this.editorEl.querySelector('.node-editor-header')!;
+    const badgeEl = headerEl.querySelector('.node-info-badge');
+    const typeSpan = headerEl.querySelector('.node-editor-type');
+    if (badgeEl) {
+      badgeEl.className = `node-info-badge ${typeCls}`;
+      badgeEl.innerHTML = icon;
+    }
+    if (typeSpan) {
+      typeSpan.textContent = typeName;
+    }
+    this.editorIdEl.textContent = nodeId;
+    (document.getElementById('node-edit-formation') as HTMLSelectElement).value = String(args.formation);
+    const nightCheckbox = document.getElementById('node-edit-night') as HTMLInputElement;
+    if (mapNight && nodeType === 'Normal') {
+      nightCheckbox.checked = true;
+      nightCheckbox.disabled = true;
+    } else {
+      nightCheckbox.checked = args.night;
+      nightCheckbox.disabled = false;
+    }
+    (document.getElementById('node-edit-proceed') as HTMLInputElement).checked = args.proceed;
+    (document.getElementById('node-edit-rules') as HTMLTextAreaElement).value = args.enemyRules;
+    this.placeholderEl.style.display = 'none';
+    this.editorEl.style.display = '';
+  }
+
+  showInfo(nodeId: string, nodeType: MapNodeType, onClose: () => void): void {
+    this.editorEl.style.display = 'none';
+    this.placeholderEl.style.display = 'none';
+    this.infoEl.style.display = '';
+
+    const icon = NODE_TYPE_ICON[nodeType] || '';
+    const name = NODE_TYPE_NAME[nodeType];
+    const typeCls = `node-type-${nodeType.toLowerCase()}`;
+
+    let desc = '';
+    switch (nodeType) {
+      case 'Start': desc = '舰队从此处出击，无战斗或设置。'; break;
+      case 'Resource': desc = '经过此点可获取资源，无需战斗。'; break;
+      case 'Penalty': desc = '经过此点会扣除资源，无需战斗。'; break;
+    }
+
+    this.infoEl.innerHTML =
+      `<div class="node-info-header">` +
+        `<div class="node-info-badge ${typeCls}">${icon}</div>` +
+        `<div><h3>${escapeHtml(nodeId)} 点</h3><span class="node-info-type">${escapeHtml(name)}</span></div>` +
+        `<button class="btn btn-small" id="btn-node-info-close">✕</button>` +
+      `</div>` +
+      `<p class="node-info-desc">${escapeHtml(desc)}</p>` +
+      `<p class="node-info-note">此类型节点没有可配置的战斗设置。</p>`;
+
+    this.infoEl.querySelector('#btn-node-info-close')?.addEventListener('click', onClose);
+  }
+
+  hide(): void {
+    this.editorEl.style.display = 'none';
+    this.infoEl.style.display = 'none';
+    this.placeholderEl.style.display = '';
+  }
+
+  collectValues(): { formation: number; night: boolean; proceed: boolean; rulesText: string } {
+    return {
+      formation: parseInt((document.getElementById('node-edit-formation') as HTMLSelectElement).value, 10),
+      night: (document.getElementById('node-edit-night') as HTMLInputElement).checked,
+      proceed: (document.getElementById('node-edit-proceed') as HTMLInputElement).checked,
+      rulesText: (document.getElementById('node-edit-rules') as HTMLTextAreaElement).value,
+    };
+  }
+}

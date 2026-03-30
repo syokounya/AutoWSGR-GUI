@@ -1,0 +1,80 @@
+/* ═══ 按钮 ═══ */
+.btn {
+  padding: 8px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.btn:hover {
+  background: var(--border);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(15, 125, 255, 0.25);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: 0 4px 14px rgba(15, 125, 255, 0.35);
+}
+
+.btn-small {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.btn-xs {
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-outline:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  filter: brightness(1.1);
+}
+
+.btn-link {
+  background: transparent;
+  color: var(--accent);
+  border: none;
+  text-decoration: underline;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn-link:hover {
+  opacity: 0.8;
+}

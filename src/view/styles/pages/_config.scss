@@ -1,0 +1,147 @@
+/* ═══ 配置页布局 ═══ */
+#page-config {
+  overflow: hidden;
+}
+
+.config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.config-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.config-page-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.config-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-col-right > .card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.config-grid .card {
+  margin-bottom: 0;
+  padding: 12px 16px;
+}
+
+.config-grid .card h3 {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.config-grid .form-group {
+  margin-bottom: 8px;
+}
+
+.config-grid .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.config-grid .form-group > label {
+  font-size: 12px;
+}
+
+.config-grid .input {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* 自动化分区 */
+.auto-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  flex: 1;
+  align-content: start;
+}
+
+.auto-section {
+  margin-bottom: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.auto-section-header {
+  margin-bottom: 4px;
+}
+
+.auto-toggle {
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.auto-toggle input[type="checkbox"] {
+  margin-right: 6px;
+}
+
+.auto-section-body {
+  padding-left: 4px;
+  font-size: 12px;
+}
+
+.auto-section-body .form-group {
+  margin-bottom: 4px;
+}
+
+.auto-section-body .form-group:last-child {
+  margin-bottom: 0;
+}
+
+/* ═══ ADB 状态指示器 ═══ */
+.adb-status {
+  display: inline-block;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.adb-status-online {
+  color: var(--success);
+  background: var(--success-bg);
+}
+.adb-status-offline {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+.adb-status-unknown {
+  color: var(--text-muted);
+  background: var(--bg-inset);
+}
+
+.config-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0 0 6px 0;
+  line-height: 1.4;
+}

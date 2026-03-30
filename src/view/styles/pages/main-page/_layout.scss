@@ -1,0 +1,193 @@
+/* ═══ 主页面双栏布局 ═══ */
+.main-layout {
+  display: flex;
+  gap: 20px;
+  height: calc(100vh - 52px - 32px);
+}
+
+.main-left {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.main-right {
+  width: 400px;
+  max-width: 400px;
+  min-width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.main-right .log-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.main-right .log-card .log-container {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+
+/* ═══ 状态指示 ═══ */
+/* ═══ 状态行 ═══ */
+.status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: stretch;
+}
+
+.status-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.status-indicator.idle {
+  background: var(--success);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.4);
+}
+
+.status-indicator.running {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+  animation: pulse 1.5s infinite;
+}
+
+.status-indicator.error {
+  background: var(--danger);
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);
+}
+
+.status-indicator.not_connected {
+  background: var(--text-muted);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* ═══ 任务卡片 ═══ */
+.task-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.task-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.task-progress {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+}
+
+/* ═══ 空闲状态 ═══ */
+.idle-text {
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state p {
+  margin-bottom: 24px;
+  font-size: 15px;
+}
+
+.empty-state-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.plans-dir-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.hint-path {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  word-break: break-all;
+  user-select: all;
+}
+
+/* ═══ 远征倒计时 ═══ */
+.expedition-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+#expedition-timer {
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ═══ 空闲操作栏 ═══ */
+.idle-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}

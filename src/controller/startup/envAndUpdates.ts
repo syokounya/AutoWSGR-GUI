@@ -19,7 +19,7 @@ export async function checkAndPrepareEnv(bridge: ElectronBridge): Promise<boolea
         return false;
       }
     } else {
-      Logger.error('未找到 Python，请安装 Python 3.12+');
+      Logger.error('未找到 Python，请安装 Python 3.12 或 3.13');
       return false;
     }
     env = await bridge.checkEnvironment();

@@ -30,9 +30,10 @@ export async function findPython(): Promise<string | null> {
   const configured = ctx.getConfiguredPythonPath();
   if (configured && fs.existsSync(configured)) {
     try {
-      const { stdout } = await execAsync(`"${configured}" --version`, { windowsHide: true });
-      if (isAllowedPythonVersion(stdout)) found = configured;
-      else ctx.sendProgress(`WARNING 用户配置的 Python 版本不兼容: ${stdout.trim()}（需要 3.12 或 3.13），回退自动检测`);
+      const { stdout, stderr } = await execAsync(`"${configured}" --version`, { windowsHide: true });
+      const verStr = stdout || stderr;
+      if (isAllowedPythonVersion(verStr)) found = configured;
+      else ctx.sendProgress(`WARNING 用户配置的 Python 版本不兼容: ${verStr.trim()}（需要 3.12 或 3.13），回退自动检测`);
     } catch {
       ctx.sendProgress('WARNING 用户配置的 Python 路径无法执行，回退自动检测');
     }
@@ -44,9 +45,10 @@ export async function findPython(): Promise<string | null> {
   const localPython = path.join(ctx.appRoot(), 'python', 'python.exe');
   if (fs.existsSync(localPython)) {
     try {
-      const { stdout } = await execAsync(`"${localPython}" --version`, { windowsHide: true });
-      if (isAllowedPythonVersion(stdout)) found = localPython;
-      else ctx.sendProgress(`WARNING 本地 Python 版本不兼容: ${stdout.trim()}（需要 3.12 或 3.13）`);
+      const { stdout, stderr } = await execAsync(`"${localPython}" --version`, { windowsHide: true });
+      const verStr = stdout || stderr;
+      if (isAllowedPythonVersion(verStr)) found = localPython;
+      else ctx.sendProgress(`WARNING 本地 Python 版本不兼容: ${verStr.trim()}（需要 3.12 或 3.13）`);
     } catch { /* local Python broken */ }
   }
 
@@ -56,8 +58,8 @@ export async function findPython(): Promise<string | null> {
     // 而 Node.js spawn() 不经过 shell，无法执行 .bat 文件。
     for (const cmd of ['python', 'python3']) {
       try {
-        const { stdout: verOut } = await execAsync(`${cmd} --version`, { windowsHide: true });
-        if (!isAllowedPythonVersion(verOut)) continue;
+        const { stdout: verOut, stderr: verErr } = await execAsync(`${cmd} --version`, { windowsHide: true });
+        if (!isAllowedPythonVersion(verOut || verErr)) continue;
         // 通过 Python 自身获取真实可执行文件路径 (解决 pyenv/.bat shim 问题)
         const { stdout } = await execAsync(
           `${cmd} -c "import sys; print(sys.executable)"`,
@@ -74,25 +76,45 @@ export async function findPython(): Promise<string | null> {
   return found;
 }
 
+/** 同步检查 Python 版本是否被允许 (shell 重定向以同时捕获 stdout/stderr) */
+function isAllowedPythonVersionSync(pythonCmd: string): boolean {
+  try {
+    const output = execSync(
+      `"${pythonCmd}" --version 2>&1`,
+      { encoding: 'utf-8', windowsHide: true, shell: 'cmd.exe' },
+    );
+    return isAllowedPythonVersion(output);
+  } catch {
+    return false;
+  }
+}
+
 /** 同步查找 Python (用于非 async 上下文) */
 export function findPythonSync(): string | null {
   if (getCachedPythonCmd() !== undefined) return getCachedPythonCmd()!;
   const ctx = getCtx();
   // 最高优先级：用户配置的 Python 路径
   const configured = ctx.getConfiguredPythonPath();
-  if (configured && fs.existsSync(configured)) return configured;
+  if (configured && fs.existsSync(configured) && isAllowedPythonVersionSync(configured)) {
+    setCachedPythonCmd(configured);
+    return configured;
+  }
   const localPython = path.join(ctx.appRoot(), 'python', 'python.exe');
-  if (fs.existsSync(localPython)) return localPython;
+  if (fs.existsSync(localPython) && isAllowedPythonVersionSync(localPython)) {
+    setCachedPythonCmd(localPython);
+    return localPython;
+  }
   for (const cmd of ['python', 'python3']) {
     try {
-      execSync(`${cmd} --version`, { windowsHide: true });
+      if (!isAllowedPythonVersionSync(cmd)) continue;
       // 解析真实路径 (pyenv/.bat shim 兼容)
       const resolved = execSync(
         `${cmd} -c "import sys; print(sys.executable)"`,
         { windowsHide: true, encoding: 'utf-8' },
       ).trim();
-      if (resolved && fs.existsSync(resolved)) return resolved;
-      return cmd;
+      const result = (resolved && fs.existsSync(resolved)) ? resolved : cmd;
+      setCachedPythonCmd(result);
+      return result;
     } catch { /* continue */ }
   }
   return null;

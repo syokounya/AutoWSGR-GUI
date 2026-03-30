@@ -1,0 +1,68 @@
+/**
+ * connection —— 后端连接与系统启动逻辑。
+ */
+import type { StartupHost } from './StartupController';
+import { Logger } from '../../utils/Logger';
+
+/** 等待后端 HTTP 服务就绪, 然后启动系统 */
+export function waitForBackendAndConnect(host: StartupHost, retries = 30): void {
+  host.scheduler.ping().then((alive) => {
+    if (alive) {
+      Logger.info('后端服务就绪，正在连接模拟器…');
+      startSystem(host);
+    } else if (retries > 0) {
+      setTimeout(() => waitForBackendAndConnect(host, retries - 1), 1000);
+    } else {
+      Logger.error('后端服务启动超时，请检查 Python 环境');
+      host.renderMain();
+    }
+  }).catch(() => {
+    if (retries > 0) {
+      setTimeout(() => waitForBackendAndConnect(host, retries - 1), 1000);
+    } else {
+      Logger.error('后端连接失败');
+      host.renderMain();
+    }
+  });
+}
+
+/** 向后端发送 system/start (连接模拟器+启动游戏) */
+export function startSystem(host: StartupHost): void {
+  const configPath = host.appRoot
+    ? `${host.appRoot.replace(/\\/g, '/')}/usersettings.yaml`
+    : undefined;
+
+  host.scheduler.setExpeditionInterval(
+    host.configModel.current.daily_automation.expedition_interval,
+  );
+
+  host.scheduler.start(configPath).then((ok) => {
+    if (ok) {
+      Logger.info('系统启动成功 ✓');
+      host.cronScheduler.start();
+      Logger.info('定时调度器已启动');
+      host.startHeartbeat();
+    } else {
+      Logger.error('系统启动失败 (模拟器连接/游戏启动异常)');
+    }
+    host.renderMain();
+  }).catch(async (e) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('abort')) {
+      Logger.warn('系统启动 HTTP 请求超时，正在检测后端状态…');
+      const alive = await host.scheduler.ping();
+      if (alive) {
+        Logger.info('后端已就绪，正在恢复连接…');
+        host.scheduler.recoverAfterTimeout();
+        host.cronScheduler.start();
+        Logger.info('定时调度器已启动');
+        host.startHeartbeat();
+      } else {
+        Logger.error('系统启动超时且后端未响应 (模拟器连接耗时过长)');
+      }
+    } else {
+      Logger.error(`系统启动异常: ${msg}`);
+    }
+    host.renderMain();
+  });
+}

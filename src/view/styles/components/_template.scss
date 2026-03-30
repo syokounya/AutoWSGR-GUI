@@ -1,0 +1,306 @@
+/* ═══ 模板向导 ═══ */
+.wizard-modal {
+  width: 480px;
+  max-width: 90vw;
+}
+.wizard-header {
+  margin-bottom: 24px;
+}
+.wizard-header h3 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0;
+}
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 8px;
+}
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.wizard-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.wizard-step-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+.wizard-step-line {
+  flex: 1;
+  height: 2px;
+  margin: 0 10px;
+  background: var(--border-strong);
+  border-radius: 1px;
+  transition: background 0.2s;
+}
+/* 当前步骤 */
+.wizard-step.active .wizard-step-num {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.wizard-step.active .wizard-step-label {
+  color: var(--text);
+  font-weight: 600;
+}
+/* 已完成步骤 */
+.wizard-step.done .wizard-step-num {
+  border-color: var(--success);
+  background: var(--success);
+  color: #fff;
+}
+.wizard-step.done .wizard-step-label {
+  color: var(--success);
+}
+/* 已完成步骤后面的连接线也变色 */
+.wizard-step.done + .wizard-step-line {
+  background: var(--success);
+}
+.wizard-page {
+  min-height: 120px;
+}
+.template-type-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.template-type-card {
+  cursor: pointer;
+}
+.template-type-card input[type="radio"] {
+  display: none;
+}
+.template-type-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 8px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  transition: all 0.15s;
+  text-align: center;
+}
+.template-type-inner span {
+  font-weight: 600;
+  font-size: 14px;
+}
+.template-type-inner small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.template-type-card input[type="radio"]:checked + .template-type-inner {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--primary);
+}
+.template-type-inner:hover {
+  border-color: var(--primary);
+}
+
+/* ═══ 编队设置网格 ═══ */
+.fleet-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.fleet-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+.fleet-pos {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.fleet-ship {
+  flex: 1;
+}
+
+/* 模板向导中的自动补全偏移（跳过 fleet-pos 圆圈） */
+.fleet-row .ship-autocomplete {
+  left: 30px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  align-items: center;
+}
+
+/* ═══ 模板库 ═══ */
+.template-library-card {
+  min-height: 0;
+  flex-shrink: 1;
+  display: flex;
+  flex-direction: column;
+}
+.template-library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.template-library-header h3 {
+  margin: 0;
+}
+.template-library-actions {
+  display: flex;
+  gap: 6px;
+}
+.template-library-items {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.tpl-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 12px 0;
+}
+.tpl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  transition: background 0.15s;
+}
+.tpl-item:hover {
+  background: var(--surface);
+}
+.tpl-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.tpl-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tpl-item-type {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.tpl-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ═══ 模板向导：多方案列表 ═══ */
+.tpl-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.tpl-plan-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.tpl-plan-entry .plan-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tpl-plan-entry .btn-remove-plan {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.tpl-plan-entry .btn-remove-plan:hover {
+  color: var(--danger);
+}
+
+/* 内置模板标识 */
+.tpl-builtin-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+  margin-left: 6px;
+  vertical-align: middle;
+  font-weight: 500;
+}
+
+/* ═══ 方案选择器弹窗 ═══ */
+.plan-selector-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 12px 0;
+  padding: 2px;
+}
+.plan-selector-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  font-size: 13px;
+}
+.plan-selector-item:hover {
+  background: var(--bg-hover);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.plan-selector-item .plan-icon {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  color: var(--accent);
+}

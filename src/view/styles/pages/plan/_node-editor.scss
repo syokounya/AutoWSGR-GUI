@@ -1,0 +1,66 @@
+/* ═══ 节点编辑面板 ═══ */
+.node-editor-placeholder {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 16px 12px;
+  font-size: 13px;
+}
+
+.node-editor {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-card), 0 0 0 1px var(--accent-subtle);
+  padding: 14px;
+}
+
+.node-editor .form-group {
+  margin-bottom: 10px;
+}
+
+.node-editor .form-row {
+  display: flex;
+  gap: 24px;
+}
+
+.node-editor .node-rules-textarea {
+  min-height: 50px;
+}
+
+.node-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.node-editor-header .btn {
+  margin-left: auto;
+}
+
+.node-editor-title h3 {
+  margin-bottom: 0;
+  text-transform: none;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.node-editor-type {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.node-editor .node-info-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+.node-editor .node-info-badge svg {
+  width: 18px;
+  height: 18px;
+}
+
+.node-rules-textarea {
+  resize: vertical;
+  font-family: "Cascadia Code", "Consolas", "Courier New", monospace;
+  min-height: 70px;
+  line-height: 1.6;
+}

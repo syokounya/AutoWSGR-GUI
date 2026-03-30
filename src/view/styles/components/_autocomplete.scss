@@ -1,0 +1,98 @@
+/* ═══ 舰船自动补全（共享） ═══ */
+.ship-autocomplete {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 1100;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  margin-top: 2px;
+}
+
+.ship-ac-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  gap: 8px;
+  background: var(--bg-card-solid);
+}
+
+.ship-ac-item:hover,
+.ship-ac-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.ship-ac-item.active .ship-ac-meta,
+.ship-ac-item:hover .ship-ac-meta {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ship-ac-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ship-ac-name b {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.ship-ac-item:hover .ship-ac-name b,
+.ship-ac-item.active .ship-ac-name b {
+  color: #fff;
+}
+
+.ship-ac-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ═══ 右键上下文菜单 ═══ */
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  padding: 4px 0;
+  min-width: 100px;
+}
+.context-menu-item {
+  padding: 6px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.context-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+/* ═══ 任务列表条目详情行 ═══ */
+.tg-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* ═══ 任务队列拖放高亮 ═══ */
+#task-area-card.drop-highlight {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}

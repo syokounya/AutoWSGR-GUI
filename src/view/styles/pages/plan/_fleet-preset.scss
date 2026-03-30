@@ -1,0 +1,126 @@
+/* ═══ 编队预设选择器 ═══ */
+.fleet-preset-card {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
+.fleet-preset-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.fleet-preset-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.fleet-preset-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.fleet-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fleet-preset-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: transparent;
+  position: relative;
+}
+
+.fleet-preset-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.fleet-preset-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.fleet-preset-item.unavailable {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fleet-preset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fleet-preset-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fleet-preset-item-actions {
+  display: none;
+  gap: 2px;
+}
+
+.fleet-preset-item:hover .fleet-preset-item-actions {
+  display: flex;
+}
+
+.fleet-preset-item-actions button {
+  font-size: 12px;
+  padding: 2px 8px;
+  line-height: 20px;
+  border: none;
+  background: var(--bg-inset);
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.fleet-preset-item-actions button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.fleet-preset-item-actions button.btn-delete:hover {
+  color: var(--danger);
+}
+
+.fleet-preset-ships {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.fleet-preset-ships .ship-tag {
+  background: var(--bg-inset);
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  line-height: 18px;
+}
+
+.fleet-preset-ships .ship-tag.ship-missing {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.fleet-preset-ships .ship-tag.ship-tag-filter {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px dashed var(--accent);
+  font-style: italic;
+}

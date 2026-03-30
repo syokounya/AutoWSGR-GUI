@@ -1,0 +1,68 @@
+/* ════════ WSGR GUI — Refined Stylesheet ════════ */
+
+/* ── 暗色主题 ── */
+:root,
+[data-theme="dark"] {
+  --bg: #0f0f1a;
+  --bg-subtle: #161625;
+  --bg-card: rgba(22, 22, 42, 0.82);
+  --bg-card-solid: #16162a;
+  --bg-hover: rgba(40, 40, 72, 0.6);
+  --bg-inset: rgba(0, 0, 0, 0.25);
+  --accent: #0f7dff;
+  --accent-hover: #3498ff;
+  --accent-glow: rgba(15, 125, 255, 0.15);
+  --accent-subtle: rgba(15, 125, 255, 0.08);
+  --text: #e4e4ec;
+  --text-secondary: #a0a0b8;
+  --text-muted: #6a6a82;
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.1);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.1);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.1);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.1);
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.3), 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+  --glass-blur: blur(20px);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
+}
+
+/* ── 亮色主题 ── */
+[data-theme="light"] {
+  --bg: #f2f0ed;
+  --bg-subtle: #eae7e2;
+  --bg-card: rgba(255, 255, 255, 0.78);
+  --bg-card-solid: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-inset: rgba(0, 0, 0, 0.04);
+  --accent: #0f7dff;
+  --accent-hover: #3498ff;
+  --accent-glow: rgba(15, 125, 255, 0.1);
+  --accent-subtle: rgba(15, 125, 255, 0.05);
+  --text: #1a1a2e;
+  --text-secondary: #555568;
+  --text-muted: #8888a0;
+  --success: #22c55e;
+  --success-bg: rgba(34, 197, 94, 0.08);
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.08);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.08);
+  --border: rgba(0, 0, 0, 0.07);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06), 0 0 1px rgba(0, 0, 0, 0.08);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+  --glass-blur: blur(20px);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+}

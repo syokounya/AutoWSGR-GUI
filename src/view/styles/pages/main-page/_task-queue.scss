@@ -1,0 +1,133 @@
+/* ═══ 统一任务区域 ═══ */
+.task-area-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.task-area-header h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.task-area-header .queue-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ═══ 任务队列 ═══ */
+.task-queue-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.task-queue-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  transition: background 0.15s;
+  cursor: grab;
+  border-bottom: 1px solid transparent;
+}
+
+.task-queue-item:hover {
+  background: var(--bg-hover);
+}
+
+.task-queue-item.tq-dragging {
+  opacity: 0.5;
+  background: var(--accent-subtle);
+}
+
+.task-queue-item.tq-drag-over {
+  border-top: 2px solid var(--accent);
+}
+
+.tq-drag-handle {
+  color: var(--text-muted);
+  cursor: grab;
+  font-size: 14px;
+  flex-shrink: 0;
+  user-select: none;
+  line-height: 1;
+  margin-right: 8px;
+}
+
+.tq-drag-handle:active { cursor: grabbing; }
+
+.task-queue-item + .task-queue-item {
+  margin-top: 2px;
+}
+
+.task-queue-item .tq-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.task-queue-item .tq-priority {
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--bg-inset);
+  border-radius: var(--radius-pill);
+  margin-left: 10px;
+}
+
+.task-queue-item .tq-remove {
+  margin-left: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.task-queue-item .tq-remove:hover {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+/* ── 正在运行的任务 ── */
+.task-queue-item.tq-running {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  position: relative;
+}
+
+.task-queue-item.tq-running .tq-name {
+  color: var(--accent);
+}
+
+.tq-progress {
+  font-size: 11px;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  margin-left: 8px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* 实时资源计数（后端出征面板 OCR） */
+.tq-acquisition {
+  font-size: 10px;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  margin-left: 8px;
+  padding: 1px 6px;
+  background: var(--bg-inset);
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+  white-space: nowrap;
+}

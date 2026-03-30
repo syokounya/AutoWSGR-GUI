@@ -1,0 +1,63 @@
+/* ═══ 导航栏 ═══ */
+.nav-bar {
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  height: 52px;
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+
+.nav-title {
+  font-weight: 700;
+  font-size: 15px;
+  margin-right: 18px;
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.nav-version {
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 6px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  opacity: 0.75;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-inset);
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  -webkit-app-region: no-drag;
+}
+
+.nav-tab {
+  padding: 6px 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-tab:hover {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.nav-tab.active {
+  color: var(--text);
+  background: var(--bg-card-solid);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}

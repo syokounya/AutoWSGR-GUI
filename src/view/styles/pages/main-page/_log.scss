@@ -1,0 +1,221 @@
+/* ═══ 日志面板 ═══ */
+
+/* 日志头：标题 + 过滤按钮 */
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.log-header h3 { margin: 0; }
+
+/* 过滤按钮行 */
+.log-filters {
+  display: flex;
+  gap: 4px;
+}
+.log-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  opacity: 0.5;
+  user-select: none;
+}
+.log-filter-btn.active {
+  opacity: 1;
+  border-color: var(--border-strong);
+  background: var(--bg-inset);
+}
+.log-filter-btn[data-level="debug"].active  { color: var(--text-muted); }
+.log-filter-btn[data-level="info"].active    { color: var(--accent); }
+.log-filter-btn[data-level="warning"].active { color: var(--warning); }
+.log-filter-btn[data-level="error"].active   { color: var(--danger); }
+.log-filter-btn:hover { opacity: 1; }
+.log-filter-label { font-weight: 500; }
+.log-filter-count {
+  min-width: 16px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+  line-height: 16px;
+}
+
+/* 日志容器 */
+.log-container {
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg-inset);
+  border-radius: var(--radius-sm);
+  padding: 6px 0;
+  font-family: "Cascadia Code", "Consolas", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 日志条目：图标 + 文字联合模式 */
+.log-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 12px;
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+.log-entry:hover {
+  background: var(--bg-inset);
+}
+.log-entry.log-hidden { display: none; }
+
+/* 级别色条 */
+.log-entry.level-debug  { border-left-color: var(--text-muted); }
+.log-entry.level-info   { border-left-color: var(--accent); }
+.log-entry.level-warn,
+.log-entry.level-warning { border-left-color: var(--warning); }
+.log-entry.level-error  { border-left-color: var(--danger); }
+.log-entry.level-critical { border-left-color: #ff6b6b; }
+
+/* 级别背景提示（warning/error 更醒目） */
+.log-entry.level-warning { background: rgba(251, 191, 36, 0.05); }
+.log-entry.level-error   { background: rgba(248, 113, 113, 0.07); }
+.log-entry.level-critical { background: rgba(255, 107, 107, 0.1); }
+
+/* 后端 [UI] 界面识别日志（v2.1.3 sortie panel OCR） */
+.log-entry.log-ui-recognition {
+  border-left-color: #2dd4bf;
+  background: rgba(45, 212, 191, 0.05);
+}
+.log-entry.log-ui-recognition .log-icon { color: #2dd4bf; }
+.log-entry.log-ui-recognition .log-msg  { color: #2dd4bf; }
+.log-entry.log-ui-recognition .log-channel { color: #2dd4bf; background: rgba(45, 212, 191, 0.1); }
+
+/* 迂回事件日志高亮（v2.1.3 改进了迂回检测精度） */
+.log-entry.log-detour {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+}
+.log-entry.log-detour .log-msg { color: #fbbf24; font-weight: 500; }
+
+/* 战果评价等级高亮 */
+.log-grade { font-weight: 700; padding: 0 2px; border-radius: 2px; }
+.log-grade.grade-ss  { color: #ffd700; text-shadow: 0 0 6px rgba(255, 215, 0, 0.6); }
+.log-grade.grade-s   { color: #f0c040; }
+.log-grade.grade-a   { color: #e879a0; }
+.log-grade.grade-low { color: #a78bfa; }
+
+/* 舰船掉落日志高亮 */
+.log-entry.log-ship-drop {
+  border-left-color: #34d399;
+  background: rgba(52, 211, 153, 0.06);
+}
+.log-entry.log-ship-drop .log-msg { color: #34d399; font-weight: 500; }
+.log-ship-drop-name { color: #34d399; font-weight: 700; }
+
+/* MVP 高亮 */
+.log-mvp { color: #fbbf24; font-weight: 600; }
+
+/* ═══ 日常操作工具栏（嵌入 status-row） ═══ */
+.ops-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+.ops-btn {
+  font-size: 11px !important;
+  padding: 3px 10px !important;
+  border-radius: 12px !important;
+  white-space: nowrap;
+}
+.ops-btn:disabled {
+  opacity: 0.45;
+}
+.ops-status {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* 级别图标 */
+.log-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+.log-entry.level-debug .log-icon  { color: var(--text-muted); }
+.log-entry.level-info  .log-icon  { color: var(--accent); }
+.log-entry.level-warn  .log-icon,
+.log-entry.level-warning .log-icon { color: var(--warning); }
+.log-entry.level-error .log-icon  { color: var(--danger); }
+.log-entry.level-critical .log-icon { color: #ff6b6b; }
+
+/* 日志正文区域 */
+.log-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 日志 meta 行：时间 + 频道 */
+.log-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 1px;
+}
+.log-time {
+  color: var(--text-muted);
+  font-size: 11px;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.log-channel {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 5px;
+  border-radius: 3px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.log-entry.level-debug  .log-channel { color: var(--text-muted); background: rgba(106,106,130,0.1); }
+.log-entry.level-info   .log-channel { color: var(--accent); background: rgba(15,125,255,0.1); }
+.log-entry.level-warn   .log-channel,
+.log-entry.level-warning .log-channel { color: var(--warning); background: rgba(251,191,36,0.1); }
+.log-entry.level-error  .log-channel { color: var(--danger); background: rgba(248,113,113,0.12); }
+.log-entry.level-critical .log-channel { color: #ff6b6b; background: rgba(255,107,107,0.15); }
+
+/* 日志消息文本 */
+.log-msg {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.log-entry.level-debug  .log-msg { color: var(--text-muted); }
+.log-entry.level-info   .log-msg { color: var(--text); }
+.log-entry.level-warn   .log-msg,
+.log-entry.level-warning .log-msg { color: var(--warning); }
+.log-entry.level-error  .log-msg { color: var(--danger); }
+.log-entry.level-critical .log-msg { color: #ff6b6b; font-weight: bold; }
+
+/* ═══ 队列操作栏 ═══ */
+.queue-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}

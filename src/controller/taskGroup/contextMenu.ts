@@ -1,0 +1,111 @@
+/**
+ * contextMenu —— 右键上下文菜单逻辑。
+ */
+import type { TaskGroupModel } from '../../model/TaskGroupModel';
+import type { Scheduler } from '../../model/scheduler';
+import { PlanModel } from '../../model/PlanModel';
+import { loadMapData, loadExMapData } from '../../model/MapDataLoader';
+import type { MapData } from '../../model/MapDataLoader';
+import type { TaskPreset } from '../../types/model';
+import { Logger } from '../../utils/Logger';
+
+export interface ContextMenuTarget {
+  source: 'taskgroup' | 'queue';
+  id: number | string;
+}
+
+export interface ContextMenuHost {
+  readonly scheduler: Scheduler;
+  importTaskPreset(preset: TaskPreset, filePath: string): void;
+  setCurrentPlan(plan: PlanModel, mapData: MapData | null): void;
+  renderPlanPreview(): void;
+  switchPage(page: string): void;
+}
+
+export function showContextMenuForItem(
+  source: 'taskgroup' | 'queue',
+  id: number | string,
+  x: number,
+  y: number,
+): ContextMenuTarget {
+  const menu = document.getElementById('context-menu');
+  if (menu) {
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.style.display = '';
+  }
+  return { source, id };
+}
+
+export function hideContextMenu(): void {
+  const menu = document.getElementById('context-menu');
+  if (menu) menu.style.display = 'none';
+}
+
+export async function handleContextMenuEdit(
+  target: ContextMenuTarget | null,
+  taskGroupModel: TaskGroupModel,
+  host: ContextMenuHost,
+): Promise<void> {
+  hideContextMenu();
+  if (!target) return;
+
+  if (target.source === 'taskgroup') {
+    const group = taskGroupModel.getActiveGroup();
+    if (!group) return;
+    const item = group.items[target.id as number];
+    if (!item) return;
+    if (item.kind === 'template') {
+      Logger.info(`模板「${item.label}」请在模板库中查看和编辑`);
+      return;
+    }
+    await openItemForEdit(item.path!, item.kind, host);
+  } else {
+    const taskId = target.id as string;
+    const running = host.scheduler.currentRunningTask;
+    const task = (running?.id === taskId) ? running : host.scheduler.taskQueue.find(t => t.id === taskId);
+    if (!task) return;
+
+    const req = task.request;
+    let planId: string | undefined;
+    if (req.type === 'normal_fight' || req.type === 'event_fight') {
+      planId = req.plan_id ?? undefined;
+    }
+    if (planId) {
+      await openItemForEdit(planId, 'plan', host);
+    } else {
+      Logger.warn(`「${task.name}」没有关联的方案文件`);
+    }
+  }
+}
+
+export async function openItemForEdit(
+  filePath: string,
+  kind: 'plan' | 'preset',
+  host: ContextMenuHost,
+): Promise<void> {
+  const bridge = window.electronBridge;
+  if (!bridge) return;
+
+  try {
+    const content = await bridge.readFile(filePath);
+    const parsed = (await import('js-yaml')).load(content) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object') return;
+
+    if (kind === 'preset' || ('task_type' in parsed && !('chapter' in parsed))) {
+      host.importTaskPreset(parsed as unknown as TaskPreset, filePath);
+    } else {
+      const plan = PlanModel.fromYaml(content, filePath);
+      const { chapter, map } = plan.data;
+      const mapData = chapter === 99
+        ? await loadExMapData(map)
+        : await loadMapData(chapter, map);
+      host.setCurrentPlan(plan, mapData);
+      host.renderPlanPreview();
+    }
+    host.switchPage('plan');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    Logger.error(`打开编辑失败: ${msg}`);
+  }
+}

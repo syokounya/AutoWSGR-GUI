@@ -1,0 +1,16 @@
+# 统一换行符为 LF
+* text=auto eol=lf
+
+# 二进制文件
+*.exe binary
+*.dll binary
+*.zip binary
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.whl binary
+*.cat binary
+*.blockmap binary
+*.pyd binary

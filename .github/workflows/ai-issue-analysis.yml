@@ -1,0 +1,71 @@
+name: AI Issue Analysis
+
+on:
+  issues:
+    types: [opened, reopened]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to analyze"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ai-issue-analysis-${{ github.event.issue.number || github.event.inputs.issue_number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    if: >-
+      github.event_name == 'issues' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request == null &&
+       contains(github.event.comment.body, '@github-actions'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Analyze issue with AI
+        id: analysis
+        uses: MistEO/ai-issue-analysis@main
+        with:
+          # 需要在仓库 Secrets 中提供 Fine-grained PAT
+          copilot-github-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          bot-name: "@github-actions"
+          issue-number: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.issue_number || '' }}
+          copilot-model: ${{ vars.COPILOT_MODEL || 'gpt-5.3-codex' }}
+          copilot-reasoning-effort: ${{ vars.COPILOT_REASONING_EFFORT || 'high' }}
+          initial-comment-body: |
+            🤖 正在分析这个 Issue，预计需要数分钟。
+            我会持续更新分析过程，并在结束后给出修复建议。
+          prompt-template: |
+            你正在分析 GitHub 仓库 {{repository}} 的 Issue #{{issue_number}}。
+
+            要求：
+            1. 先复述问题和复现条件；
+            2. 基于仓库代码、配置和日志定位最可能根因；
+            3. 明确区分“已验证事实”和“推测”；
+            4. 给出最小修复方案和验证步骤；
+            5. 若证据不足，列出需要用户补充的材料。
+
+            把最终结论写到 {{copilot_answer_file}}。
+          comment-prompt-template: |
+            用户补充要求：{{comment_body}}
+
+      - name: Upload local debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-issue-analysis-summary
+          path: |
+            .cache/analysis_prompt.txt
+            .cache/copilot_output.txt
+            .cache/final_conclusion.md
+          if-no-files-found: ignore

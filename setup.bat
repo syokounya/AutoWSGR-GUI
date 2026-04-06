@@ -99,6 +99,29 @@ echo       OK: Python %PYTHON_VERSION% portable installed
 
 :python_ok
 
+:: Configure TLS cert path for pip/requests
+set "SSL_CERT_FILE="
+for /f "usebackq delims=" %%p in (`"%PYTHON_EXE%" -c "import ssl, os; p=ssl.get_default_verify_paths().cafile; print(p if p and os.path.exists(p) else '')" 2^>nul`) do set "SSL_CERT_FILE=%%p"
+if not defined SSL_CERT_FILE (
+    for /f "usebackq delims=" %%p in (`"%PYTHON_EXE%" -c "import certifi; print(certifi.where())" 2^>nul`) do set "SSL_CERT_FILE=%%p"
+)
+if not defined SSL_CERT_FILE (
+    for /f "usebackq delims=" %%p in (`"%PYTHON_EXE%" -c "import pip._vendor.certifi as c; print(c.where())" 2^>nul`) do set "SSL_CERT_FILE=%%p"
+)
+if defined SSL_CERT_FILE (
+    if exist "!SSL_CERT_FILE!" (
+        set "REQUESTS_CA_BUNDLE=!SSL_CERT_FILE!"
+        set "PIP_CERT=!SSL_CERT_FILE!"
+        set "CURL_CA_BUNDLE=!SSL_CERT_FILE!"
+        echo       TLS cert: !SSL_CERT_FILE!
+    ) else (
+        set "SSL_CERT_FILE="
+    )
+)
+if not defined SSL_CERT_FILE (
+    echo       WARNING: TLS cert file not detected, HTTPS operations may fail
+)
+
 :: --- Python Dependencies ---
 echo [2/2] Installing Python dependencies...
 

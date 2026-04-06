@@ -9,6 +9,15 @@ import { getCtx } from './context';
 
 const execAsync = promisify(exec);
 
+const CERT_ENV_KEYS: Array<keyof NodeJS.ProcessEnv> = [
+  'SSL_CERT_FILE',
+  'REQUESTS_CA_BUNDLE',
+  'PIP_CERT',
+  'CURL_CA_BUNDLE',
+];
+
+const certFileCache = new Map<string, string | null>();
+
 // ════════════════════════════════════════
 // 共享接口
 // ════════════════════════════════════════
@@ -49,6 +58,102 @@ export function pipEnv(): NodeJS.ProcessEnv {
       ? `${localSite}${path.delimiter}${existing}`
       : localSite,
   };
+}
+
+function isExistingFile(filePath: string | undefined): filePath is string {
+  return !!filePath && fs.existsSync(filePath);
+}
+
+function pickExistingCertFromEnv(): string | null {
+  for (const key of CERT_ENV_KEYS) {
+    const value = process.env[key];
+    if (isExistingFile(value)) return value;
+  }
+  return null;
+}
+
+function scriptPathForProbe(): string {
+  const token = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  return path.join(getCtx().getTempDir(), `autowsgr_cert_probe_${token}.py`);
+}
+
+async function probePythonCertFile(pythonCmd: string): Promise<string | null> {
+  const cached = certFileCache.get(pythonCmd);
+  if (cached !== undefined) return cached;
+
+  const scriptPath = scriptPathForProbe();
+  const scriptContent = [
+    'import json, os, ssl',
+    'candidates = []',
+    'for k in ["SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "PIP_CERT", "CURL_CA_BUNDLE"]:',
+    '    p = os.environ.get(k)',
+    '    if p: candidates.append(p)',
+    'try:',
+    '    dv = ssl.get_default_verify_paths()',
+    '    for p in [dv.cafile, dv.openssl_cafile]:',
+    '        if p: candidates.append(p)',
+    'except Exception:',
+    '    pass',
+    'try:',
+    '    import certifi',
+    '    candidates.append(certifi.where())',
+    'except Exception:',
+    '    pass',
+    'try:',
+    '    import pip._vendor.certifi as pip_certifi',
+    '    candidates.append(pip_certifi.where())',
+    'except Exception:',
+    '    pass',
+    'resolved = None',
+    'for p in candidates:',
+    '    if p and os.path.exists(p):',
+    '        resolved = p',
+    '        break',
+    'print(json.dumps({"cert_file": resolved}))',
+  ].join('\n');
+
+  try {
+    fs.writeFileSync(scriptPath, scriptContent, 'utf-8');
+    const { stdout } = await execAsync(`"${pythonCmd}" "${scriptPath}"`, {
+      windowsHide: true,
+      timeout: 12000,
+      env: {
+        ...process.env,
+        PYTHONUTF8: '1',
+        PYTHONIOENCODING: 'utf-8',
+      },
+    });
+    const parsed = JSON.parse(stdout.trim()) as { cert_file?: unknown };
+    const certFile = typeof parsed.cert_file === 'string' ? parsed.cert_file.trim() : '';
+    if (isExistingFile(certFile)) {
+      certFileCache.set(pythonCmd, certFile);
+      return certFile;
+    }
+  } catch {
+    // ignore probe failures; caller will continue without TLS env override
+  } finally {
+    try { fs.unlinkSync(scriptPath); } catch { /* ignore */ }
+  }
+
+  certFileCache.set(pythonCmd, null);
+  return null;
+}
+
+/**
+ * 为给定 Python 解释器补齐 TLS 证书环境变量。
+ * 优先沿用用户已配置的证书路径，否则自动探测 Python 默认/Certifi 证书。
+ */
+export async function ensureSslCertForPython(pythonCmd: string): Promise<string | null> {
+  const existing = pickExistingCertFromEnv();
+  const certFile = existing || await probePythonCertFile(pythonCmd);
+  if (!certFile) return null;
+
+  if (!isExistingFile(process.env.SSL_CERT_FILE)) process.env.SSL_CERT_FILE = certFile;
+  if (!isExistingFile(process.env.REQUESTS_CA_BUNDLE)) process.env.REQUESTS_CA_BUNDLE = certFile;
+  if (!isExistingFile(process.env.PIP_CERT)) process.env.PIP_CERT = certFile;
+  if (!isExistingFile(process.env.CURL_CA_BUNDLE)) process.env.CURL_CA_BUNDLE = certFile;
+
+  return certFile;
 }
 
 /** 判断是否使用本地便携版 Python */

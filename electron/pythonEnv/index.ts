@@ -9,7 +9,7 @@ export { type PythonEnvContext, initPythonEnv, clearPythonCache } from './contex
 export { isAllowedPythonVersion, findPython, findPythonSync } from './finder';
 
 // utils
-export { type EnvCheckResult, sysPathInsert, ensurePthFile, pipEnv, localSitePackages, ensurePip } from './utils';
+export { type EnvCheckResult, sysPathInsert, ensurePthFile, pipEnv, localSitePackages, ensurePip, ensureSslCertForPython } from './utils';
 
 // envCheck
 export { checkEnvironment } from './envCheck';

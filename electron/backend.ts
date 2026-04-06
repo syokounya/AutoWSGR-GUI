@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { execSync, spawn, ChildProcess } from 'child_process';
 import type { BrowserWindow } from 'electron';
-import { ensurePthFile, findPython, localSitePackages } from './pythonEnv';
+import { ensurePthFile, ensureSslCertForPython, findPython, localSitePackages } from './pythonEnv';
 
 // ════════════════════════════════════════
 // Context — 由 main.ts 在启动时注入
@@ -85,6 +85,10 @@ export async function startBackend(): Promise<void> {
     console.error('[Backend] 找不到 Python');
     return;
   }
+
+  const certFile = await ensureSslCertForPython(pythonCmd);
+  if (certFile) console.log(`[Backend] TLS cert: ${certFile}`);
+  else console.warn('[Backend] WARNING 未检测到 TLS 根证书，HTTPS 请求可能失败');
 
   const cwd = ctx.appRoot();
   const localSite = localSitePackages();

@@ -6,8 +6,8 @@ import * as fs from 'fs';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import { getCtx, setCachedPythonCmd } from './context';
-import { findPython, findPythonSync } from './finder';
-import { ensurePthFile, localSitePackages, pipEnv, ensurePip } from './utils';
+import { findPython } from './finder';
+import { ensurePthFile, localSitePackages, pipEnv, ensurePip, ensureSslCertForPython } from './utils';
 import { ENV_READY_MARKER } from './envCheck';
 
 const execAsync = promisify(exec);
@@ -35,6 +35,8 @@ export async function installPortablePython(): Promise<{ success: boolean }> {
   // 检查 pip 是否可用
   try {
     await execAsync(`"${pythonExe}" -m pip --version`, { windowsHide: true, timeout: 15000 });
+    const certFile = await ensureSslCertForPython(pythonExe);
+    if (certFile) ctx.sendProgress(`TLS 证书已就绪: ${certFile}`);
     ctx.sendProgress('内置 Python + pip 就绪 ✓');
     return { success: true };
   } catch { /* pip not available, install it */ }
@@ -46,6 +48,9 @@ export async function installPortablePython(): Promise<{ success: boolean }> {
     await execAsync(`curl -sSL -o "${getPipPath}" "https://bootstrap.pypa.io/get-pip.py"`, { windowsHide: true, timeout: 60000 });
     await execAsync(`"${pythonExe}" "${getPipPath}"`, { windowsHide: true, timeout: 120000 });
     try { fs.unlinkSync(getPipPath); } catch { /* ignore */ }
+    const certFile = await ensureSslCertForPython(pythonExe);
+    if (certFile) ctx.sendProgress(`TLS 证书已就绪: ${certFile}`);
+    else ctx.sendProgress('WARNING 未检测到 TLS 根证书，后续联网操作可能失败');
     ctx.sendProgress('pip 安装完成 ✓');
     return { success: true };
   } catch {
@@ -92,6 +97,9 @@ async function downloadPortablePython(): Promise<{ success: boolean }> {
   try {
     await execAsync(`curl -sSL -o "${getPipPath}" "https://bootstrap.pypa.io/get-pip.py"`, { windowsHide: true, timeout: 60000 });
     await execAsync(`"${pythonExe}" "${getPipPath}"`, { windowsHide: true, timeout: 120000 });
+    const certFile = await ensureSslCertForPython(pythonExe);
+    if (certFile) ctx.sendProgress(`TLS 证书已就绪: ${certFile}`);
+    else ctx.sendProgress('WARNING 未检测到 TLS 根证书，后续联网操作可能失败');
   } catch {
     ctx.sendProgress('ERROR pip 安装失败');
     return { success: false };
@@ -164,6 +172,10 @@ export async function installDependencies(pythonCmd: string): Promise<{ success:
   // 安装后环境变化，清除标记以便下次重新检查
   try { fs.unlinkSync(ENV_READY_MARKER()); } catch { /* ignore */ }
 
+  const certFile = await ensureSslCertForPython(pythonCmd);
+  if (certFile) ctx.sendProgress(`TLS 证书已就绪: ${certFile}`);
+  else ctx.sendProgress('WARNING 未检测到 TLS 根证书，后续联网操作可能失败');
+
   // 确保 pip 可用
   if (!(await ensurePip(pythonCmd))) {
     return { success: false, output: 'pip 安装失败，无法安装依赖' };
@@ -209,16 +221,18 @@ export async function installDependencies(pythonCmd: string): Promise<{ success:
 }
 
 /** 更新 autowsgr 包（仅升级 autowsgr 本体，不级联重装所有依赖） */
-export function pullUpdates(): Promise<{ success: boolean; output: string }> {
+export async function pullUpdates(): Promise<{ success: boolean; output: string }> {
   const ctx = getCtx();
   // 更新后清除环境标记
   try { fs.unlinkSync(ENV_READY_MARKER()); } catch { /* ignore */ }
+  const pythonCmd = await findPython();
+  if (!pythonCmd) return { success: false, output: '找不到 Python' };
+
+  const certFile = await ensureSslCertForPython(pythonCmd);
+  if (certFile) ctx.sendProgress(`TLS 证书已就绪: ${certFile}`);
+  else ctx.sendProgress('WARNING 未检测到 TLS 根证书，后续联网操作可能失败');
+
   return new Promise((resolve) => {
-    const pythonCmd = findPythonSync();
-    if (!pythonCmd) {
-      resolve({ success: false, output: '找不到 Python' });
-      return;
-    }
     const targetDir = localSitePackages();
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 

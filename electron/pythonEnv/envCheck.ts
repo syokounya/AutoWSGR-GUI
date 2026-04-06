@@ -8,7 +8,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { getCtx, setCachedPythonCmd } from './context';
 import { findPython } from './finder';
-import { type EnvCheckResult, ensurePthFile, localSitePackages, pipEnv, ensurePip } from './utils';
+import { type EnvCheckResult, ensurePthFile, localSitePackages, pipEnv, ensurePip, ensureSslCertForPython } from './utils';
 import { autoUpdateAutowsgr, type AutoUpdateDeps } from './updater';
 
 const execAsync = promisify(exec);
@@ -115,6 +115,9 @@ export async function checkEnvironment(): Promise<EnvCheckResult> {
   const marker = readEnvMarker();
   if (marker) {
     setCachedPythonCmd(marker.pythonCmd);
+    const certFile = await ensureSslCertForPython(marker.pythonCmd);
+    if (certFile) ctx.sendProgress(`TLS 证书已就绪: ${certFile}`);
+    else ctx.sendProgress('WARNING 未检测到 TLS 根证书，后续联网操作可能失败');
     // 每次启动检查并自动更新 autowsgr
     const updatedVer = await autoUpdateAutowsgr(marker.pythonCmd, buildAutoUpdateDeps());
     const finalVer = updatedVer ?? marker.autowsgrVersion;
@@ -138,6 +141,10 @@ export async function checkEnvironment(): Promise<EnvCheckResult> {
     ctx.sendProgress('WARNING 未找到兼容的 Python（需要 3.12 或 3.13）');
     return { pythonCmd: null, pythonVersion: null, missingPackages: [], allReady: false };
   }
+
+  const certFile = await ensureSslCertForPython(pythonCmd);
+  if (certFile) ctx.sendProgress(`TLS 证书已就绪: ${certFile}`);
+  else ctx.sendProgress('WARNING 未检测到 TLS 根证书，后续联网操作可能失败');
 
   let pythonVersion: string | null = null;
   try {

@@ -12,7 +12,7 @@ import { getNodeType, isNightNode } from '../../model/MapDataLoader';
 import type { MapData } from '../../model/MapDataLoader';
 import { toBackendName, resolveFleetPreset, shipSlotLabel } from '../../data/shipData';
 import { Logger } from '../../utils/Logger';
-import { importPlanFlow, exportPlanFlow, confirmNewPlanFlow, type PlanSetters } from './importExport';
+import { importPlanFlow, exportPlanFlow, savePlanFlow, confirmNewPlanFlow, type PlanSetters } from './importExport';
 import { importTaskPresetFlow, showPresetDetailFlow, closePresetDetailFlow, executePresetFlow, type PresetState } from './presetFlow';
 import { saveNodeEditorValues } from './nodeEditor';
 import { buildPlanPreviewVO } from './rendering';
@@ -120,6 +120,8 @@ export class PlanController {
 
     document.getElementById('btn-export-plan')?.addEventListener('click', () =>
       exportPlanFlow(this.currentPlan, this.host, () => this.renderPlanPreview()));
+    document.getElementById('btn-save-plan')?.addEventListener('click', () =>
+      savePlanFlow(this.currentPlan, this.host, () => this.renderPlanPreview()));
 
     document.getElementById('btn-new-plan')?.addEventListener('click', () => this.planView.showNewPlanDialog());
     document.getElementById('btn-new-plan-confirm')?.addEventListener('click', () =>
@@ -263,7 +265,7 @@ export class PlanController {
       req.plan_id = plan.fileName;
     } else {
       req.plan = this.buildInlinePlan(plan);
-      Logger.warn('当前方案尚未导出 YAML，将以内存方案直接执行');
+      Logger.warn('当前方案尚未保存 YAML，将以内存方案直接执行');
     }
 
     if (firstPreset && firstPreset.ships.length > 0) {

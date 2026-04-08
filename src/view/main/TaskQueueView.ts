@@ -48,6 +48,23 @@ export class TaskQueueView {
   private resolveProgressPercent(item: MainViewObject['taskQueue'][number], isRunning: boolean): number {
     if (!isRunning) return 0;
 
+    // 多轮任务优先按“轮次/总轮次”计算，避免后端单轮 1/1 进度把条形图误显示为 100%。
+    if (item.totalTimes > 1) {
+      if (item.progress) {
+        const parts = item.progress.split('/');
+        if (parts.length === 2) {
+          const cur = parseInt(parts[0], 10);
+          const total = parseInt(parts[1], 10);
+          if (Number.isFinite(cur) && Number.isFinite(total) && total > 1) {
+            return this.clampPercent(cur / total);
+          }
+        }
+      }
+
+      const currentRound = item.totalTimes - item.remaining + 1;
+      return this.clampPercent(currentRound / item.totalTimes);
+    }
+
     if (item.progressPercent != null && Number.isFinite(item.progressPercent)) {
       return this.clampPercent(item.progressPercent);
     }
@@ -61,11 +78,6 @@ export class TaskQueueView {
           return this.clampPercent(cur / total);
         }
       }
-    }
-
-    if (item.totalTimes > 0) {
-      const currentRound = item.totalTimes - item.remaining + 1;
-      return this.clampPercent(currentRound / item.totalTimes);
     }
 
     return 0;

@@ -41,6 +41,36 @@ export class TaskQueueView {
     });
   }
 
+  private clampPercent(value: number): number {
+    return Math.min(1, Math.max(0, value));
+  }
+
+  private resolveProgressPercent(item: MainViewObject['taskQueue'][number], isRunning: boolean): number {
+    if (!isRunning) return 0;
+
+    if (item.progressPercent != null && Number.isFinite(item.progressPercent)) {
+      return this.clampPercent(item.progressPercent);
+    }
+
+    if (item.progress) {
+      const parts = item.progress.split('/');
+      if (parts.length === 2) {
+        const cur = parseInt(parts[0], 10);
+        const total = parseInt(parts[1], 10);
+        if (Number.isFinite(cur) && Number.isFinite(total) && total > 0) {
+          return this.clampPercent(cur / total);
+        }
+      }
+    }
+
+    if (item.totalTimes > 0) {
+      const currentRound = item.totalTimes - item.remaining + 1;
+      return this.clampPercent(currentRound / item.totalTimes);
+    }
+
+    return 0;
+  }
+
   render(vo: MainViewObject): void {
     const hasQueue = vo.taskQueue.length > 0;
 
@@ -57,6 +87,8 @@ export class TaskQueueView {
         const div = document.createElement('div');
         div.className = 'task-queue-item' + (isRunning ? ' tq-running' : '');
         div.dataset['queueIndex'] = String(queueIndex);
+        const mainRow = document.createElement('div');
+        mainRow.className = 'tq-main-row';
 
         if (!isRunning) {
           div.draggable = true;
@@ -91,12 +123,7 @@ export class TaskQueueView {
           const handle = document.createElement('span');
           handle.className = 'tq-drag-handle';
           handle.textContent = '⠿';
-          div.appendChild(handle);
-        }
-
-        if (isRunning && item.progressPercent != null && item.progressPercent > 0) {
-          const pct = Math.min(1, Math.max(0, item.progressPercent)) * 100;
-          div.style.background = `linear-gradient(90deg, var(--accent-subtle) ${pct}%, transparent ${pct}%)`;
+          mainRow.appendChild(handle);
         }
 
         const nameSpan = document.createElement('span');
@@ -104,7 +131,7 @@ export class TaskQueueView {
         nameSpan.textContent = item.totalTimes > 1
           ? `${item.name} ×${item.totalTimes}`
           : item.name;
-        div.appendChild(nameSpan);
+        mainRow.appendChild(nameSpan);
 
         if (isRunning) {
           const progSpan = document.createElement('span');
@@ -128,20 +155,20 @@ export class TaskQueueView {
           } else if (item.progress) {
             progSpan.textContent = item.progress;
           }
-          if (progSpan.textContent) div.appendChild(progSpan);
+          if (progSpan.textContent) mainRow.appendChild(progSpan);
 
           if (item.acquisitionText) {
             const acqSpan = document.createElement('span');
             acqSpan.className = 'tq-acquisition';
             acqSpan.textContent = item.acquisitionText;
-            div.appendChild(acqSpan);
+            mainRow.appendChild(acqSpan);
           }
         }
 
         const prioSpan = document.createElement('span');
         prioSpan.className = 'tq-priority';
         prioSpan.textContent = item.priorityLabel;
-        div.appendChild(prioSpan);
+        mainRow.appendChild(prioSpan);
 
         if (!isRunning) {
           const removeBtn = document.createElement('button');
@@ -151,7 +178,20 @@ export class TaskQueueView {
           removeBtn.addEventListener('click', () => {
             this.onRemoveQueueItem?.(item.id);
           });
-          div.appendChild(removeBtn);
+          mainRow.appendChild(removeBtn);
+        }
+
+        div.appendChild(mainRow);
+
+        if (isRunning) {
+          const pct = this.resolveProgressPercent(item, isRunning);
+          const track = document.createElement('div');
+          track.className = 'tq-progress-track';
+          const fill = document.createElement('div');
+          fill.className = 'tq-progress-fill';
+          fill.style.width = `${(pct * 100).toFixed(1)}%`;
+          track.appendChild(fill);
+          div.appendChild(track);
         }
 
         div.addEventListener('contextmenu', (e) => {

@@ -42,6 +42,10 @@ export interface SchedulerTask {
   maxRetries: number;
   /** 当前已重试次数 */
   retryCount: number;
+  /** 是否强制重试（重试时插入同优先级队首） */
+  forceRetry?: boolean;
+  /** 是否允许同优先级轮询（true=轮询，false/未设置=连续执行） */
+  allowPolling?: boolean;
   /** 泡澡修理配置 (可选) */
   bathRepairConfig?: BathRepairConfig;
   /** 任务使用的编队号 (用于泡澡修理前检查编队状态) */

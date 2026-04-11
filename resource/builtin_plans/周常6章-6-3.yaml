@@ -1,4 +1,4 @@
-# 周常第6章(备选) — 地图 6-3
+﻿# 周常第6章(备选) — 地图 6-3
 # 编队: SS*6
 # 默认复纵阵
 
@@ -14,14 +14,17 @@ node_defaults:
   night: false
   proceed: true
 
+node_args:
+  J:
+    night: true
+
 fleet_presets:
   - name: SS*6
     ships:
-      - { ship_type: ss }
-      - { ship_type: ss }
-      - { ship_type: ss }
-      - { ship_type: ss }
-      - { ship_type: ss }
-      - { ship_type: ss }
-
-times: 5
+      - { ship_type: ss, min_level: 100 }
+      - { ship_type: ss, min_level: 100 }
+      - { ship_type: ss, min_level: 100 }
+      - { ship_type: ss, min_level: 100 }
+      - { ship_type: ss, min_level: 100 }
+      - { ship_type: ss, min_level: 100 }
+times: 3

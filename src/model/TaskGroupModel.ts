@@ -22,8 +22,12 @@ export interface TaskGroupItem {
   label: string;
   /** 战役类型覆盖（仅 campaign 模板使用时选择） */
   campaignName?: string;
-  /** 舰队编号覆盖（仅 exercise 模板使用时选择） */
+  /** 舰队编号覆盖（exercise 模板或 plan 条目可设置） */
   fleet_id?: number;
+  /** 是否强制重试（失败后优先重试当前任务） */
+  forceRetry?: boolean;
+  /** 是否允许同优先级轮询（true=轮询，false/未设置=连续执行） */
+  allowPolling?: boolean;
   /** 章节覆盖（仅 decisive 模板使用时选择） */
   chapter?: number;
   /** 编队预设索引（plan 类型条目指定默认使用的编队预设） */

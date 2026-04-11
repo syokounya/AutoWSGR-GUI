@@ -153,8 +153,23 @@ export class Scheduler {
     fleetId?: number,
     fleetPresets?: FleetPreset[],
     currentPresetIndex?: number,
+    forceRetry?: boolean,
+    allowPolling?: boolean,
   ): string {
-    const id = this._taskQueue.addTask(name, type, request, priority, times, stopCondition, bathRepairConfig, fleetId, fleetPresets, currentPresetIndex);
+    const id = this._taskQueue.addTask(
+      name,
+      type,
+      request,
+      priority,
+      times,
+      stopCondition,
+      bathRepairConfig,
+      fleetId,
+      fleetPresets,
+      currentPresetIndex,
+      forceRetry,
+      allowPolling,
+    );
     this.notifyQueueChange();
     return id;
   }
@@ -210,7 +225,7 @@ export class Scheduler {
     runningTask.retryCount = 0;
     runningTask.backendTaskId = undefined;
     this.currentTask = null;
-    this._taskQueue.insertByPriority(runningTask);
+    this._taskQueue.insertByPriority(runningTask, !runningTask.allowPolling);
     this._stopped = false;
 
     this._taskQueue.clearDeferredTimer();
@@ -374,9 +389,11 @@ export class Scheduler {
   private scheduleRetry(task: SchedulerTask, reason: string): boolean {
     if (task.retryCount >= task.maxRetries) return false;
     task.retryCount++;
-    this.emitLog('warn', `任务「${task.name}」${reason}，${task.retryCount}/${task.maxRetries} 次重试 (5s 后)`);
+    const retryHint = task.forceRetry ? '，强制重试' : '';
+    this.emitLog('warn', `任务「${task.name}」${reason}，${task.retryCount}/${task.maxRetries} 次重试${retryHint} (5s 后)`);
     setTimeout(() => {
-      this._taskQueue.insertByPriority(task);
+      const prioritizeCurrent = !!task.forceRetry || !task.allowPolling;
+      this._taskQueue.insertByPriority(task, prioritizeCurrent);
       this.notifyQueueChange();
       this.consumeNext();
     }, 5000);
@@ -409,10 +426,23 @@ export class Scheduler {
       return;
     }
 
+    const shouldCountRound = this.shouldCountAsCompletedRound(finished, result);
+    if (!shouldCountRound) {
+      const expectedLastNode = this.getExpectedLastNode(finished);
+      if (expectedLastNode) {
+        this.emitLog('info', `任务「${finished.name}」未到达终点节点 ${expectedLastNode}，本轮不计入次数`);
+      }
+    }
+
     this.callbacks.onTaskCompleted?.(finished.id, true, result, error);
 
-    // 后触发: 如果还有剩余次数，追加一个新任务回队列
-    if (finished.remainingTimes > 1) {
+    const nextRemainingTimes = shouldCountRound
+      ? finished.remainingTimes - 1
+      : finished.remainingTimes;
+
+    // 后触发: 若还有剩余次数，追加一个新任务回队列。
+    // 注意: 未达到终点节点时，本轮不计数，remainingTimes 不减少。
+    if (nextRemainingTimes > 0) {
       if (finished.stopCondition) {
         const shouldStop = await this.stopChecker.checkCondition(finished.stopCondition, finished.name);
         if (shouldStop) {
@@ -423,28 +453,62 @@ export class Scheduler {
         }
       }
 
-      const followUp: SchedulerTask = {
-        id: generateTaskId(),
-        name: finished.name,
-        type: finished.type,
-        priority: finished.priority,
-        request: finished.request,
-        remainingTimes: finished.remainingTimes - 1,
-        totalTimes: finished.totalTimes,
-        stopCondition: finished.stopCondition,
-        maxRetries: finished.maxRetries,
-        retryCount: 0,
-        bathRepairConfig: finished.bathRepairConfig,
-        fleetId: finished.fleetId,
-        fleetPresets: finished.fleetPresets,
-        currentPresetIndex: finished.currentPresetIndex,
-      };
+      const followUp: SchedulerTask = this.buildFollowUpTask(finished, nextRemainingTimes);
       Logger.debug(`followUp: 「${finished.name}」 remaining=${followUp.remainingTimes}/${followUp.totalTimes}`, 'scheduler');
-      this._taskQueue.insertByPriority(followUp);
+      this._taskQueue.insertByPriority(followUp, !finished.allowPolling);
     }
 
     this.currentTask = null;
     this.consumeNext();
+  }
+
+  private buildFollowUpTask(finished: SchedulerTask, remainingTimes: number): SchedulerTask {
+    return {
+      id: generateTaskId(),
+      name: finished.name,
+      type: finished.type,
+      priority: finished.priority,
+      request: finished.request,
+      remainingTimes,
+      totalTimes: finished.totalTimes,
+      stopCondition: finished.stopCondition,
+      maxRetries: finished.maxRetries,
+      retryCount: 0,
+      forceRetry: finished.forceRetry,
+      allowPolling: finished.allowPolling,
+      bathRepairConfig: finished.bathRepairConfig,
+      fleetId: finished.fleetId,
+      fleetPresets: finished.fleetPresets,
+      currentPresetIndex: finished.currentPresetIndex,
+    };
+  }
+
+  private getExpectedLastNode(task: SchedulerTask): string | null {
+    if (task.type !== 'normal_fight' && task.type !== 'event_fight') return null;
+    if (task.request.type !== 'normal_fight' && task.request.type !== 'event_fight') return null;
+
+    const selectedNodes = task.request.plan?.selected_nodes;
+    if (!selectedNodes || selectedNodes.length === 0) return null;
+
+    const last = selectedNodes[selectedNodes.length - 1];
+    if (typeof last !== 'string' || !last.trim()) return null;
+    return last.trim().toUpperCase();
+  }
+
+  private shouldCountAsCompletedRound(task: SchedulerTask, result?: TaskResult | null): boolean {
+    const expectedLastNode = this.getExpectedLastNode(task);
+    if (!expectedLastNode) return true;
+
+    const details = result?.details;
+    if (!details || details.length === 0) return true;
+
+    // 失败轮次保持原有行为（计入次数），避免在异常场景下无限重跑。
+    if (details.some((round) => !round.success)) return true;
+
+    return details.some((round) => {
+      if (!Array.isArray(round.nodes)) return false;
+      return round.nodes.some((node) => String(node).trim().toUpperCase() === expectedLastNode);
+    });
   }
 
   /** 任务执行中实时检查停止条件，满足则立即发送 taskStop */

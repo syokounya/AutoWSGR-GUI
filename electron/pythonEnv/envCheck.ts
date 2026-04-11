@@ -48,14 +48,22 @@ async function ensureVCRedist(): Promise<void> {
 export const ENV_READY_MARKER = () => path.join(getCtx().appRoot(), '.env_ready');
 
 /** 最低 autowsgr 版本要求 */
-const MIN_AUTOWSGR_VERSION = [2, 1, 0];
+const MIN_AUTOWSGR_VERSION = [2, 1, 9, 5];
 
 /** 检查 autowsgr 版本是否满足最低要求 */
 function isVersionOk(ver: string): boolean {
-  const parts = ver.replace(/[^0-9.]/g, '.').split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((parts[i] || 0) > (MIN_AUTOWSGR_VERSION[i] || 0)) return true;
-    if ((parts[i] || 0) < (MIN_AUTOWSGR_VERSION[i] || 0)) return false;
+  const parts = ver
+    .replace(/[^0-9.]/g, '.')
+    .split('.')
+    .filter(Boolean)
+    .map(Number)
+    .filter((v) => Number.isFinite(v));
+  const maxLen = Math.max(parts.length, MIN_AUTOWSGR_VERSION.length);
+  for (let i = 0; i < maxLen; i++) {
+    const current = parts[i] || 0;
+    const required = MIN_AUTOWSGR_VERSION[i] || 0;
+    if (current > required) return true;
+    if (current < required) return false;
   }
   return true;
 }

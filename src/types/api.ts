@@ -149,10 +149,22 @@ export interface GameAcquisitionData {
 export interface NodeDecisionReq {
   formation?: number;
   night?: boolean;
+  long_missile_support?: boolean;
   proceed?: boolean;
   proceed_stop?: number[];
   detour?: boolean;
   enemy_rules?: string[][] | null;
+}
+
+export interface FleetRuleReq {
+  /** 候选舰船名（按优先级顺序） */
+  candidates: string[];
+  /** 搜索关键词（用于同名舰船精确筛选） */
+  search_name?: string;
+  /** 等级下限（仅选择 >= 该等级） */
+  min_level?: number;
+  /** 等级上限（仅选择 <= 该等级） */
+  max_level?: number;
 }
 
 export interface CombatPlanReq {
@@ -162,6 +174,7 @@ export interface CombatPlanReq {
   map?: number | string;
   fleet_id?: number;
   fleet?: string[] | null;
+  fleet_rules?: Array<string | FleetRuleReq> | null;
   repair_mode?: number[];
   fight_condition?: number;
   selected_nodes?: string[];

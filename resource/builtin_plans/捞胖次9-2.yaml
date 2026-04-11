@@ -12,7 +12,7 @@ selected_nodes:
   - O
   - E
   - K
-fleet_id: 1
+fleet_id: 2
 fight_condition: 1
 repair_mode: 2
 node_defaults:

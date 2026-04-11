@@ -71,6 +71,7 @@ export function addPlanToTaskList(
   taskGroupModel: TaskGroupModel,
   fleetPresetIndex?: number,
   presetName?: string,
+  fleetId?: number,
 ): void {
   const planName = planPath.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? tpl.name;
   const label = presetName
@@ -82,5 +83,8 @@ export function addPlanToTaskList(
     times: tpl.defaultTimes ?? 1,
     label,
     fleetPresetIndex,
+    fleet_id: fleetId,
+    forceRetry: tpl.forceRetry,
+    allowPolling: tpl.allowPolling,
   });
 }

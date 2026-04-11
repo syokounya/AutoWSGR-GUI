@@ -10,7 +10,7 @@ import { TaskPriority } from '../../model/scheduler';
 import type { NodeArgs, TaskPreset } from '../../types/model';
 import { getNodeType, isNightNode } from '../../model/MapDataLoader';
 import type { MapData } from '../../model/MapDataLoader';
-import { toBackendName, resolveFleetPreset, shipSlotLabel } from '../../data/shipData';
+import { toBackendName, resolveFleetPreset, resolveFleetPresetRules, shipSlotLabel } from '../../data/shipData';
 import { Logger } from '../../utils/Logger';
 import { importPlanFlow, exportPlanFlow, savePlanFlow, confirmNewPlanFlow, type PlanSetters } from './importExport';
 import { importTaskPresetFlow, showPresetDetailFlow, closePresetDetailFlow, executePresetFlow, type PresetState } from './presetFlow';
@@ -101,6 +101,7 @@ export class PlanController {
       this.planView.showNodeEditor(nodeId, nodeType as any, {
         formation: args.formation ?? 2,
         night: args.night ?? false,
+        longMissileSupport: args.long_missile_support ?? false,
         proceed: args.proceed ?? true,
         enemyRules: rulesText,
       }, mapNight);
@@ -213,6 +214,7 @@ export class PlanController {
     const mapped: NodeDecisionReq = {};
     if (args.formation != null) mapped.formation = args.formation;
     if (args.night != null) mapped.night = args.night;
+    if (args.long_missile_support != null) mapped.long_missile_support = args.long_missile_support;
     if (args.proceed != null) mapped.proceed = args.proceed;
     if (args.proceed_stop != null) mapped.proceed_stop = args.proceed_stop;
     if (args.enemy_rules && args.enemy_rules.length > 0) {
@@ -268,12 +270,18 @@ export class PlanController {
       Logger.warn('当前方案尚未保存 YAML，将以内存方案直接执行');
     }
 
+    if (plan.data.selected_nodes.length > 0) {
+      req.plan = req.plan ?? {};
+      req.plan.selected_nodes = [...plan.data.selected_nodes];
+    }
+
     if (firstPreset && firstPreset.ships.length > 0) {
       const resolved = resolveFleetPreset(firstPreset.ships);
       if (resolved.length > 0) {
         if (!req.plan) req.plan = {};
         req.plan.fleet = resolved.map(toBackendName);
         req.plan.fleet_id = plan.data.fleet_id;
+        req.plan.fleet_rules = resolveFleetPresetRules(firstPreset.ships);
       }
     }
 

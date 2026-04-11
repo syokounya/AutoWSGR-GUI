@@ -24,6 +24,7 @@
     "builtin": true,
     "createdAt": "2026-01-01T00:00:00.000Z",
     "description": "每周战斗任务（第1-9章），选择对应章节方案执行",
+    "forceRetry": true,
     "planPaths": [
       "resource/builtin_plans/周常1章-1-2.yaml",
       "resource/builtin_plans/周常2章-2-1.yaml",
@@ -37,7 +38,7 @@
       "resource/builtin_plans/周常8章-8-2.yaml",
       "resource/builtin_plans/周常9章-9-2.yaml"
     ],
-    "defaultTimes": 5
+    "defaultTimes": 3
   },
   {
     "id": "builtin_exercise",

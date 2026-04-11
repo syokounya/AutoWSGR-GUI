@@ -41,8 +41,18 @@ export function showFleetEditDialog(
     const slot = ships[i];
     const isFilter = slot != null && typeof slot === 'object';
     const shipName = typeof slot === 'string' ? slot : '';
+    const fixedName = isFilter ? ((slot as any).name ?? '') : '';
     const nation = isFilter ? ((slot as any).nation ?? '') : '';
     const shipType = isFilter ? ((slot as any).ship_type ?? '') : '';
+    const priority = isFilter && Array.isArray((slot as any).priority)
+      ? (slot as any).priority.join(', ')
+      : '';
+    const minLevel = isFilter && Number.isFinite((slot as any).min_level)
+      ? String((slot as any).min_level)
+      : '';
+    const maxLevel = isFilter && Number.isFinite((slot as any).max_level)
+      ? String((slot as any).max_level)
+      : '';
 
     const nationOpts = `<option value="">不限</option>` + ALL_NATIONS.map(
       (n: string) => `<option value="${escapeHtml(n)}"${n === nation ? ' selected' : ''}>${escapeHtml(n)}</option>`
@@ -61,8 +71,14 @@ export function showFleetEditDialog(
           <input type="text" class="input fleet-edit-ship" placeholder="舰船名称" value="${escapeHtml(shipName)}" autocomplete="off" />
         </div>
         <div class="ship-filter-mode"${isFilter ? '' : ' style="display:none"'}>
+          <input type="text" class="input fleet-edit-filter-name" placeholder="固定舰名（可选）" value="${escapeHtml(fixedName)}" />
           <select class="input fleet-edit-nation">${nationOpts}</select>
           <select class="input fleet-edit-type">${typeOpts}</select>
+          <input type="text" class="input fleet-edit-priority" placeholder="优先舰船（逗号分隔）" value="${escapeHtml(priority)}" />
+          <div class="fleet-edit-level-range">
+            <input type="number" class="input fleet-edit-min-level" min="1" max="200" placeholder="最低等级" value="${escapeHtml(minLevel)}" />
+            <input type="number" class="input fleet-edit-max-level" min="1" max="200" placeholder="最高等级" value="${escapeHtml(maxLevel)}" />
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -123,12 +139,33 @@ export function showFleetEditDialog(
       const toggle = wrapper.querySelector('.ship-slot-toggle')!;
       const isFilterMode = toggle.classList.contains('active');
       if (isFilterMode) {
+        const fixedName = (wrapper.querySelector('.fleet-edit-filter-name') as HTMLInputElement).value.trim();
         const nation = (wrapper.querySelector('.fleet-edit-nation') as HTMLSelectElement).value;
         const shipType = (wrapper.querySelector('.fleet-edit-type') as HTMLSelectElement).value;
-        if (nation || shipType) {
+        const priorityRaw = (wrapper.querySelector('.fleet-edit-priority') as HTMLInputElement).value.trim();
+        const minLevelRaw = (wrapper.querySelector('.fleet-edit-min-level') as HTMLInputElement).value.trim();
+        const maxLevelRaw = (wrapper.querySelector('.fleet-edit-max-level') as HTMLInputElement).value.trim();
+        const hasFilter = fixedName || nation || shipType || priorityRaw || minLevelRaw || maxLevelRaw;
+        if (hasFilter) {
           const filter: ShipFilter = {};
+          if (fixedName) filter.name = fixedName;
           if (nation) filter.nation = nation;
           if (shipType) filter.ship_type = shipType;
+          if (priorityRaw) {
+            const names = priorityRaw
+              .split(/[，,]/)
+              .map(s => s.trim())
+              .filter(Boolean);
+            if (names.length > 0) filter.priority = names;
+          }
+          if (minLevelRaw) {
+            const minLevel = parseInt(minLevelRaw, 10);
+            if (!isNaN(minLevel) && minLevel > 0) filter.min_level = minLevel;
+          }
+          if (maxLevelRaw) {
+            const maxLevel = parseInt(maxLevelRaw, 10);
+            if (!isNaN(maxLevel) && maxLevel > 0) filter.max_level = maxLevel;
+          }
           newShips.push(filter);
         }
       } else {

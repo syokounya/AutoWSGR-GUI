@@ -1,4 +1,4 @@
-# 周常第1章 — 地图 1-2
+﻿# 周常第1章 — 地图 1-2
 # 编队: 任意4条驱逐
 # 默认复纵阵
 
@@ -14,12 +14,15 @@ node_defaults:
   night: false
   proceed: true
 
+node_args:
+  C:
+    night: true
+
 fleet_presets:
   - name: 4驱逐
     ships:
-      - { ship_type: dd }
-      - { ship_type: dd }
-      - { ship_type: dd }
-      - { ship_type: dd }
-
-times: 5
+      - { ship_type: dd, min_level: 100 }
+      - { ship_type: dd, min_level: 100 }
+      - { ship_type: dd, min_level: 100 }
+      - { ship_type: dd, min_level: 100 }
+times: 3

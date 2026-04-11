@@ -158,6 +158,7 @@ export class PlanModel {
     const out: Record<string, unknown> = {};
     if (args.formation != null) out.formation = args.formation;
     if (args.night != null) out.night = args.night;
+    if (args.long_missile_support != null) out.long_missile_support = args.long_missile_support;
     if (args.proceed != null) out.proceed = args.proceed;
     if (args.SL_when_detour_fails != null) out.SL_when_detour_fails = args.SL_when_detour_fails;
     if (args.enemy_rules && args.enemy_rules.length > 0) out.enemy_rules = args.enemy_rules;
@@ -187,9 +188,23 @@ export class PlanModel {
     if (raw && typeof raw === 'object') {
       const obj = raw as Record<string, unknown>;
       const filter: ShipFilter = {};
+      if (typeof obj.name === 'string') filter.name = obj.name;
       if (typeof obj.nation === 'string') filter.nation = obj.nation;
       if (typeof obj.ship_type === 'string') filter.ship_type = obj.ship_type;
-      if (filter.nation || filter.ship_type) return filter;
+      if (Array.isArray(obj.priority)) {
+        const names = (obj.priority as unknown[])
+          .filter(v => typeof v === 'string')
+          .map(v => String(v).trim())
+          .filter(Boolean);
+        if (names.length > 0) filter.priority = names;
+      }
+      if (obj.min_level != null && Number.isFinite(Number(obj.min_level))) {
+        filter.min_level = Math.max(1, Math.floor(Number(obj.min_level)));
+      }
+      if (obj.max_level != null && Number.isFinite(Number(obj.max_level))) {
+        filter.max_level = Math.max(1, Math.floor(Number(obj.max_level)));
+      }
+      if (filter.name || filter.nation || filter.ship_type || filter.priority || filter.min_level != null || filter.max_level != null) return filter;
     }
     return String(raw);
   }

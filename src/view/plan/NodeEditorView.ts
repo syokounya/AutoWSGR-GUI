@@ -14,7 +14,7 @@ export class NodeEditorView {
     this.infoEl = document.getElementById('node-info')!;
   }
 
-  show(nodeId: string, nodeType: MapNodeType, args: { formation: number; night: boolean; proceed: boolean; enemyRules: string }, mapNight = false): void {
+  show(nodeId: string, nodeType: MapNodeType, args: { formation: number; night: boolean; longMissileSupport: boolean; proceed: boolean; enemyRules: string }, mapNight = false): void {
     this.infoEl.style.display = 'none';
 
     const isNightBattle = mapNight && nodeType === 'Normal';
@@ -41,6 +41,7 @@ export class NodeEditorView {
       nightCheckbox.checked = args.night;
       nightCheckbox.disabled = false;
     }
+    (document.getElementById('node-edit-long-missile-support') as HTMLInputElement).checked = args.longMissileSupport;
     (document.getElementById('node-edit-proceed') as HTMLInputElement).checked = args.proceed;
     (document.getElementById('node-edit-rules') as HTMLTextAreaElement).value = args.enemyRules;
     this.placeholderEl.style.display = 'none';
@@ -81,10 +82,11 @@ export class NodeEditorView {
     this.placeholderEl.style.display = '';
   }
 
-  collectValues(): { formation: number; night: boolean; proceed: boolean; rulesText: string } {
+  collectValues(): { formation: number; night: boolean; longMissileSupport: boolean; proceed: boolean; rulesText: string } {
     return {
       formation: parseInt((document.getElementById('node-edit-formation') as HTMLSelectElement).value, 10),
       night: (document.getElementById('node-edit-night') as HTMLInputElement).checked,
+      longMissileSupport: (document.getElementById('node-edit-long-missile-support') as HTMLInputElement).checked,
       proceed: (document.getElementById('node-edit-proceed') as HTMLInputElement).checked,
       rulesText: (document.getElementById('node-edit-rules') as HTMLTextAreaElement).value,
     };

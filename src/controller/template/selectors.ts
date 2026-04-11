@@ -20,6 +20,26 @@ const DECISIVE_CHAPTERS = [
   { value: 5, label: '第 5 章' }, { value: 6, label: '第 6 章' },
 ];
 
+const NORMAL_FLEET_IDS = [1, 2, 3, 4] as const;
+
+async function showNormalFightFleetSelector(
+  templateName: string,
+  planName: string,
+  defaultFleetId: number,
+  wizardView: TemplateWizardView,
+): Promise<number | null> {
+  const options: SelectorOption[] = NORMAL_FLEET_IDS.map((fleetId) => ({
+    icon: '⚓',
+    label: fleetId === defaultFleetId
+      ? `第 ${fleetId} 分队（默认）`
+      : `第 ${fleetId} 分队`,
+  }));
+
+  const result = await wizardView.showSelector(`「${templateName} / ${planName}」— 选择使用分队`, options);
+  if (!result) return null;
+  return NORMAL_FLEET_IDS[result.index] ?? null;
+}
+
 /** 方案选择器（多方案模板） */
 export async function showPlanSelector(
   tpl: TaskTemplate,
@@ -39,15 +59,40 @@ export async function showPlanSelector(
 
   const idx = result.index;
   const planPath = paths[idx];
+  const planName = planPath.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? planPath;
+
+  let parsedPlan: Record<string, unknown> | undefined;
 
   const bridge = window.electronBridge;
   if (bridge) {
     try {
       const content = await bridge.readFile(planPath);
-      const parsed = (await import('js-yaml')).load(content) as Record<string, unknown>;
-      const rawPresets = parsed?.fleet_presets;
-      if (Array.isArray(rawPresets) && rawPresets.length > 0) {
-        await showFleetPresetPicker(tpl, planPath, rawPresets, groupName, wizardView, taskGroupModel, renderTaskGroup);
+      parsedPlan = (await import('js-yaml')).load(content) as Record<string, unknown>;
+      const rawPresets = Array.isArray(parsedPlan?.fleet_presets) ? parsedPlan.fleet_presets as any[] : [];
+      if (rawPresets.length > 0) {
+        let defaultFleetId = tpl.fleet_id ?? 1;
+        const rawFleetId = Number(parsedPlan?.fleet_id);
+        if (Number.isFinite(rawFleetId) && rawFleetId >= 1 && rawFleetId <= 4) {
+          defaultFleetId = rawFleetId;
+        }
+        if (defaultFleetId === 1) {
+          // 后端暂不支持对第一分队重编，默认切到第二分队。
+          defaultFleetId = 2;
+        }
+
+        const selectedFleetId = await showNormalFightFleetSelector(tpl.name, planName, defaultFleetId, wizardView);
+        if (selectedFleetId == null) return;
+
+        await showFleetPresetPicker(
+          tpl,
+          planPath,
+          rawPresets,
+          groupName,
+          wizardView,
+          taskGroupModel,
+          renderTaskGroup,
+          selectedFleetId,
+        );
         return;
       }
     } catch { /* 忽略读取失败 */ }
@@ -56,7 +101,7 @@ export async function showPlanSelector(
   addPlanToTaskList(tpl, planPath, groupName, taskGroupModel);
   taskGroupModel.save();
   renderTaskGroup();
-  Logger.info(`模板「${tpl.name}」→ 已加入任务列表「${groupName}」（方案: ${planPath.split(/[\\/]/).pop()}）`);
+  Logger.info(`模板「${tpl.name}」→ 已加入任务列表「${groupName}」（方案: ${planName}）`);
 }
 
 /** 编队预设多选器 */
@@ -68,6 +113,7 @@ export async function showFleetPresetPicker(
   wizardView: TemplateWizardView,
   taskGroupModel: TaskGroupModel,
   renderTaskGroup: () => void,
+  selectedFleetId: number,
 ): Promise<void> {
   const planName = planPath.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? '';
   const options: SelectorOption[] = rawPresets.map((p: any, i: number) => {
@@ -86,12 +132,12 @@ export async function showFleetPresetPicker(
 
   for (const idx of indices) {
     const presetName = rawPresets[idx]?.name ?? '';
-    addPlanToTaskList(tpl, planPath, groupName, taskGroupModel, idx, presetName);
+    addPlanToTaskList(tpl, planPath, groupName, taskGroupModel, idx, presetName, selectedFleetId);
   }
   taskGroupModel.save();
   renderTaskGroup();
   const names = indices.map(i => rawPresets[i]?.name ?? '').join(', ');
-  Logger.info(`模板「${tpl.name}」→ 已加入任务列表「${groupName}」（方案: ${planName}, 编队: ${names}）`);
+  Logger.info(`模板「${tpl.name}」→ 已加入任务列表「${groupName}」（方案: ${planName}, 分队: ${selectedFleetId}, 编队预设: ${names}）`);
 }
 
 /** 战役类型选择器 */

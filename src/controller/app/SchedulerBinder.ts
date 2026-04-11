@@ -19,10 +19,14 @@ export interface SchedulerBinderHost {
 }
 
 export class SchedulerBinder {
+  private static readonly DEFAULT_EXERCISE_TOTAL = 6;
+
   // ── 状态（从 AppController 迁移而来） ──
   private pendingExerciseTaskId: string | null = null;
   private pendingBattleTaskId: string | null = null;
   private pendingLootTaskId: string | null = null;
+  private exerciseTotal = SchedulerBinder.DEFAULT_EXERCISE_TOTAL;
+  private exerciseCurrent = 0;
   currentProgress = '';
   trackedLoot = '';
   trackedShip = '';
@@ -39,12 +43,21 @@ export class SchedulerBinder {
       },
 
       onProgressUpdate: (_taskId, progress) => {
+        if (this.host.scheduler.currentRunningTask?.type === 'exercise') {
+          // 演习优先使用日志解析进度；若尚未解析到日志，先展示 0/默认总场次。
+          if (!this.currentProgress) {
+            this.currentProgress = `0/${this.exerciseTotal}`;
+            this.host.renderMain();
+          }
+          return;
+        }
         this.currentProgress = `${progress.current}/${progress.total}`;
         this.host.renderMain();
       },
 
       onTaskCompleted: (taskId, success, _result, _error) => {
         this.currentProgress = '';
+        this.resetExerciseProgress();
         this.trackedLoot = '';
         this.trackedShip = '';
         if (taskId === this.pendingExerciseTaskId) {
@@ -69,6 +82,10 @@ export class SchedulerBinder {
       onLog: (msg) => {
         const lootMatch = msg.message.match(/\[UI\] 战利品数量: (\d+\/\d+)/);
         const shipMatch = msg.message.match(/\[UI\] 舰船数量: (\d+\/\d+)/);
+        if (this.host.scheduler.currentRunningTask?.type === 'exercise') {
+          const updated = this.updateExerciseProgressFromLog(msg.message);
+          if (updated) this.host.renderMain();
+        }
         if (lootMatch) { this.trackedLoot = lootMatch[1]; this.host.renderMain(); }
         if (shipMatch) { this.trackedShip = shipMatch[1]; this.host.renderMain(); }
         Logger.logLevel(msg.level.toLowerCase(), msg.message, msg.channel);
@@ -100,6 +117,73 @@ export class SchedulerBinder {
         if (el) el.textContent = this.expeditionTimerText;
       },
     });
+  }
+
+  private resetExerciseProgress(): void {
+    this.exerciseCurrent = 0;
+    this.exerciseTotal = SchedulerBinder.DEFAULT_EXERCISE_TOTAL;
+  }
+
+  private updateExerciseProgressFromLog(message: string): boolean {
+    let changed = false;
+
+    if (message.includes('[OPS] 开始演习流程')) {
+      this.exerciseCurrent = 0;
+      this.currentProgress = `0/${this.exerciseTotal}`;
+      return true;
+    }
+
+    const rivalMatch = message.match(/\[OPS\] 当前可挑战对手:\s*ExerciseRivalStatus\(\[([^\]]*)\]\)/);
+    if (rivalMatch) {
+      const flags = rivalMatch[1]
+        .split(',')
+        .map(s => s.trim().toUpperCase())
+        .filter(Boolean);
+      if (flags.length > 0) {
+        const available = flags.filter(f => f === 'Y').length;
+        const nextTotal = available > 0 ? available : flags.length;
+        if (nextTotal > 0 && nextTotal !== this.exerciseTotal) {
+          this.exerciseTotal = nextTotal;
+          changed = true;
+        }
+        if (!this.currentProgress) {
+          this.currentProgress = `0/${this.exerciseTotal}`;
+          changed = true;
+        }
+      }
+    }
+
+    const challengeMatch = message.match(/\[OPS\] 正在挑战对手\s*(\d+)/);
+    if (challengeMatch) {
+      const index = parseInt(challengeMatch[1], 10);
+      if (Number.isFinite(index) && index > 0) {
+        this.exerciseCurrent = Math.max(this.exerciseCurrent, index);
+        if (this.exerciseCurrent > this.exerciseTotal) {
+          this.exerciseTotal = this.exerciseCurrent;
+        }
+        const next = `${this.exerciseCurrent}/${this.exerciseTotal}`;
+        if (next !== this.currentProgress) {
+          this.currentProgress = next;
+          changed = true;
+        }
+      }
+    }
+
+    const finishedMatch = message.match(/\[OPS\] 演习流程结束,\s*共完成\s*(\d+)\s*场/);
+    if (finishedMatch) {
+      const done = parseInt(finishedMatch[1], 10);
+      if (Number.isFinite(done) && done >= 0) {
+        this.exerciseCurrent = done;
+        if (done > this.exerciseTotal) this.exerciseTotal = done;
+        const next = `${this.exerciseCurrent}/${this.exerciseTotal}`;
+        if (next !== this.currentProgress) {
+          this.currentProgress = next;
+          changed = true;
+        }
+      }
+    }
+
+    return changed;
   }
 
   /** 绑定定时调度器回调 */
@@ -174,6 +258,10 @@ export class SchedulerBinder {
         times: 1,
         gap: plan.data.gap ?? 0,
       };
+      if (plan.data.selected_nodes.length > 0) {
+        req.plan = req.plan ?? {};
+        req.plan.selected_nodes = [...plan.data.selected_nodes];
+      }
       const stopCondition = { loot_count_ge: stopCount };
       const id = this.host.scheduler.addTask(
         `自动刷胖次·${plan.mapName}`,

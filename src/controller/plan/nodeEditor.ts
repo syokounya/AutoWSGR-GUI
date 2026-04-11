@@ -39,6 +39,7 @@ export function saveNodeEditorValues(
     ...currentPlan.data.node_args[editingNodeId],
     formation: vals.formation,
     night: vals.night,
+    long_missile_support: vals.longMissileSupport,
     proceed: vals.proceed,
     enemy_rules: rules.length > 0 ? rules : undefined,
   };

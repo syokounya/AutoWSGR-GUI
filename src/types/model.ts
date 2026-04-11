@@ -15,17 +15,27 @@ export interface NodeArgs {
   enemy_rules?: EnemyRule[];
   formation?: number;              // 1-5
   night?: boolean;
+  /** 是否开启远程打击（导潜等可远程打击舰船） */
+  long_missile_support?: boolean;
   proceed?: boolean;
   proceed_stop?: number[];         // 6 个元素
   SL_when_detour_fails?: boolean;
 }
 
-/** 舰船筛选条件 (模糊匹配: 按国籍/舰种选船) */
+/** 舰船筛选条件 (按舰名/国籍/舰种选船) */
 export interface ShipFilter {
+  /** 固定舰名（可选） */
+  name?: string;
   /** 国籍, 如 "德国", "日本" */
   nation?: string;
   /** 舰种代号, 如 "dd", "ss" */
   ship_type?: string;
+  /** 优先舰船名列表（按顺序尝试） */
+  priority?: string[];
+  /** 等级下限（仅选择 >= 该等级） */
+  min_level?: number;
+  /** 等级上限（仅选择 <= 该等级） */
+  max_level?: number;
 }
 
 /** 编队槽位: 具体舰船名 或 模糊筛选条件 */
@@ -180,6 +190,10 @@ export interface TaskTemplate {
   builtin?: boolean;
   /** 内置模板的描述说明 */
   description?: string;
+  /** 是否强制重试失败任务（重试时插回同优先级队首，避免跳到下一条） */
+  forceRetry?: boolean;
+  /** 是否允许同优先级轮询（true=轮询，false/未设置=连续执行当前任务直至次数结束） */
+  allowPolling?: boolean;
 
   // normal_fight / event_fight
   planPath?: string;               // 引用的方案文件路径（单方案，向后兼容）

@@ -5,7 +5,7 @@
 import type { TaskRequest } from '../../types/api';
 import type { StopCondition, BathRepairConfig, FleetPreset } from '../../types/model';
 import { TaskPriority, type SchedulerTaskType, type SchedulerTask } from '../../types/scheduler';
-import { resolveFleetPreset } from '../../data/shipData';
+import { resolveFleetPreset, resolveFleetPresetRules, toBackendName } from '../../data/shipData';
 
 // ════════════════════════════════════════
 // ID 生成 & 辅助函数
@@ -65,9 +65,14 @@ export class TaskQueue {
 
   // ── 队列写入 ──
 
-  /** 按优先级插入队列 */
-  insertByPriority(task: SchedulerTask): void {
-    const idx = this.queue.findIndex((t) => t.priority > task.priority);
+  /**
+   * 按优先级插入队列。
+   * beforeSamePriority=true 时，会插入到同优先级任务之前。
+   */
+  insertByPriority(task: SchedulerTask, beforeSamePriority = false): void {
+    const idx = this.queue.findIndex((t) =>
+      beforeSamePriority ? t.priority >= task.priority : t.priority > task.priority,
+    );
     if (idx === -1) {
       this.queue.push(task);
     } else {
@@ -87,6 +92,8 @@ export class TaskQueue {
     fleetId?: number,
     fleetPresets?: FleetPreset[],
     currentPresetIndex?: number,
+    forceRetry?: boolean,
+    allowPolling?: boolean,
   ): string {
     const id = generateTaskId();
     const task: SchedulerTask = {
@@ -100,6 +107,8 @@ export class TaskQueue {
       stopCondition,
       maxRetries: 2,
       retryCount: 0,
+      forceRetry,
+      allowPolling: !!allowPolling,
       bathRepairConfig,
       fleetId,
       fleetPresets,
@@ -192,11 +201,13 @@ export class TaskQueue {
     const req = task.request;
     if (req.type === 'normal_fight' || req.type === 'event_fight') {
       const resolved = resolveFleetPreset(preset.ships);
-      const fleet = resolved.map(n => n.endsWith('·改') ? n.slice(0, -2) : n);
+      const fleet = resolved.map(toBackendName);
+      const fleetRules = resolveFleetPresetRules(preset.ships);
       if (req.plan) {
         req.plan.fleet = fleet;
+        req.plan.fleet_rules = fleetRules;
       } else {
-        (req as any).plan = { fleet, fleet_id: task.fleetId };
+        (req as any).plan = { fleet, fleet_rules: fleetRules, fleet_id: task.fleetId };
       }
     }
   }

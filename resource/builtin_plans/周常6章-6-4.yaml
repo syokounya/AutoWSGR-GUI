@@ -1,4 +1,4 @@
-# 周常第6章 — 地图 6-4
+﻿# 周常第6章 — 地图 6-4
 # 编队方案:
 #   1) 克劳塞维茨·改 + T-23·改 + 2条德国驱逐 + 赛尔弗里吉 + 85工程
 #   2) 85工程 + 斯佩伯爵海军上将·改 + 鲃鱼·改 + 岛风·改 + 2条日本驱逐
@@ -16,22 +16,25 @@ node_defaults:
   night: false
   proceed: true
 
+node_args:
+  K:
+    night: true
+
 fleet_presets:
   - name: 克劳塞维茨德系队
     ships:
-      - 克劳塞维茨·改
-      - T-23·改
-      - { nation: 德国, ship_type: dd }
-      - { nation: 德国, ship_type: dd }
-      - 赛尔弗里吉
-      - 85工程
+      - { name: 克劳塞维茨·改, min_level: 100 }
+      - { name: T-23·改, min_level: 100 }
+      - { nation: 德国, ship_type: dd, min_level: 100 }
+      - { nation: 德国, ship_type: dd, min_level: 100 }
+      - { name: 赛尔弗里吉, min_level: 100 }
+      - { name: 85工程, min_level: 100 }
   - name: 85工程日系混编
     ships:
-      - 85工程
-      - 斯佩伯爵海军上将·改
-      - 鲃鱼·改
-      - 岛风(岛风型驱逐舰)·改
-      - { nation: 日本, ship_type: dd }
-      - { nation: 日本, ship_type: dd }
-
-times: 5
+      - { name: 85工程, min_level: 100 }
+      - { name: 斯佩伯爵海军上将·改, min_level: 100 }
+      - { name: 鲃鱼·改, min_level: 100 }
+      - { name: 岛风(岛风型驱逐舰)·改, min_level: 100 }
+      - { nation: 日本, ship_type: dd, min_level: 100 }
+      - { nation: 日本, ship_type: dd, min_level: 100 }
+times: 3

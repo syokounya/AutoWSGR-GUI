@@ -7,7 +7,7 @@ import { PlanModel } from '../../model/PlanModel';
 import { TaskPriority } from '../../model/scheduler';
 import type { NormalFightReq, TaskRequest } from '../../types/api';
 import type { TaskPreset } from '../../types/model';
-import { resolveFleetPreset, toBackendName } from '../../data/shipData';
+import { resolveFleetPreset, resolveFleetPresetRules, toBackendName } from '../../data/shipData';
 import { Logger } from '../../utils/Logger';
 import type { TaskGroupHost } from './TaskGroupController';
 
@@ -45,16 +45,40 @@ export async function loadGroupToQueue(
           times: 1,
           gap: plan.data.gap ?? 0,
         };
+        if (plan.data.selected_nodes.length > 0) {
+          req.plan = req.plan ?? {};
+          req.plan.selected_nodes = [...plan.data.selected_nodes];
+        }
+        const selectedFleetId = item.fleet_id ?? plan.data.fleet_id;
+        if (selectedFleetId != null) {
+          req.plan = req.plan ?? {};
+          req.plan.fleet_id = selectedFleetId;
+        }
         if (item.fleetPresetIndex != null && plan.data.fleet_presets) {
           const preset = plan.data.fleet_presets[item.fleetPresetIndex];
           if (preset) {
             const resolved = resolveFleetPreset(preset.ships);
             if (resolved.length > 0) {
-              req.plan = { fleet: resolved.map(toBackendName), fleet_id: plan.data.fleet_id };
+              req.plan = req.plan ?? {};
+              req.plan.fleet = resolved.map(toBackendName);
+              req.plan.fleet_rules = resolveFleetPresetRules(preset.ships);
             }
           }
         }
-        host.scheduler.addTask(plan.mapName, 'normal_fight', req, TaskPriority.USER_TASK, times, plan.data.stop_condition);
+        host.scheduler.addTask(
+          plan.mapName,
+          'normal_fight',
+          req,
+          TaskPriority.USER_TASK,
+          times,
+          plan.data.stop_condition,
+          undefined,
+          selectedFleetId,
+          undefined,
+          undefined,
+          !!item.forceRetry,
+          !!item.allowPolling,
+        );
       }
       loadedCount++;
     } catch (e) {
@@ -81,16 +105,17 @@ export function loadTemplateToQueue(
 
   let req: TaskRequest;
   const times = item.times;
+  const allowPolling = item.allowPolling ?? tpl.allowPolling ?? false;
 
   switch (tpl.type) {
     case 'exercise':
       req = { type: 'exercise', fleet_id: item.fleet_id ?? tpl.fleet_id ?? 1 };
-      host.scheduler.addTask(item.label || tpl.name, 'exercise', req, TaskPriority.USER_TASK, 1);
+      host.scheduler.addTask(item.label || tpl.name, 'exercise', req, TaskPriority.USER_TASK, 1, undefined, undefined, undefined, undefined, undefined, undefined, allowPolling);
       break;
     case 'campaign': {
       const cName = item.campaignName ?? tpl.campaign_name ?? '困难潜艇';
       req = { type: 'campaign', campaign_name: cName, times: 1 };
-      host.scheduler.addTask(item.label || tpl.name, 'campaign', req, TaskPriority.USER_TASK, times);
+      host.scheduler.addTask(item.label || tpl.name, 'campaign', req, TaskPriority.USER_TASK, times, undefined, undefined, undefined, undefined, undefined, undefined, allowPolling);
       break;
     }
     case 'decisive':
@@ -102,7 +127,7 @@ export function loadTemplateToQueue(
         flagship_priority: tpl.flagship_priority ?? [],
         use_quick_repair: tpl.use_quick_repair,
       };
-      host.scheduler.addTask(item.label || tpl.name, 'decisive', req, TaskPriority.USER_TASK, 1);
+      host.scheduler.addTask(item.label || tpl.name, 'decisive', req, TaskPriority.USER_TASK, 1, undefined, undefined, undefined, undefined, undefined, undefined, allowPolling);
       break;
     default:
       return false;
@@ -147,16 +172,40 @@ export async function loadSingleItemToQueue(
         times: 1,
         gap: plan.data.gap ?? 0,
       };
+      if (plan.data.selected_nodes.length > 0) {
+        req.plan = req.plan ?? {};
+        req.plan.selected_nodes = [...plan.data.selected_nodes];
+      }
+      const selectedFleetId = item.fleet_id ?? plan.data.fleet_id;
+      if (selectedFleetId != null) {
+        req.plan = req.plan ?? {};
+        req.plan.fleet_id = selectedFleetId;
+      }
       if (item.fleetPresetIndex != null && plan.data.fleet_presets) {
         const preset = plan.data.fleet_presets[item.fleetPresetIndex];
         if (preset) {
           const resolved = resolveFleetPreset(preset.ships);
           if (resolved.length > 0) {
-            req.plan = { fleet: resolved.map(toBackendName), fleet_id: plan.data.fleet_id };
+            req.plan = req.plan ?? {};
+            req.plan.fleet = resolved.map(toBackendName);
+            req.plan.fleet_rules = resolveFleetPresetRules(preset.ships);
           }
         }
       }
-      host.scheduler.addTask(plan.mapName, 'normal_fight', req, TaskPriority.USER_TASK, item.times, plan.data.stop_condition);
+      host.scheduler.addTask(
+        plan.mapName,
+        'normal_fight',
+        req,
+        TaskPriority.USER_TASK,
+        item.times,
+        plan.data.stop_condition,
+        undefined,
+        selectedFleetId,
+        undefined,
+        undefined,
+        !!item.forceRetry,
+        !!item.allowPolling,
+      );
     }
 
     Logger.info(`已将「${item.label}」加入队列`);

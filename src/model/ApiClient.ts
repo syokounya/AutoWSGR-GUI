@@ -82,8 +82,78 @@ export class ApiClient {
 
   // ── 任务执行 ──
 
+  private static formatValidationDetail(detail: unknown): string {
+    if (!Array.isArray(detail)) return '任务启动失败';
+    const parts = detail
+      .map((item) => {
+        const row = item as { loc?: unknown; msg?: unknown };
+        const loc = Array.isArray(row.loc) ? row.loc.map(String).join('.') : 'request';
+        const msg = typeof row.msg === 'string' ? row.msg : '参数校验失败';
+        return `${loc}: ${msg}`;
+      })
+      .filter(Boolean);
+    return parts.length > 0 ? parts.join('; ') : '任务启动失败';
+  }
+
+  private static shouldRetryTaskStartWithLegacyPayload(payload: unknown): boolean {
+    const p = payload as { detail?: unknown };
+    if (!Array.isArray(p?.detail)) return false;
+    return p.detail.some((item) => {
+      const row = item as { type?: unknown; loc?: unknown };
+      if (row.type !== 'extra_forbidden') return false;
+      const loc = Array.isArray(row.loc) ? row.loc.map(String).join('.') : '';
+      return loc.includes('fleet_rules') || loc.includes('long_missile_support');
+    });
+  }
+
+  private static makeLegacyTaskRequest(req: TaskRequest): TaskRequest {
+    const cloned = JSON.parse(JSON.stringify(req)) as TaskRequest & {
+      plan?: {
+        fleet_rules?: unknown;
+        node_defaults?: { long_missile_support?: unknown };
+        node_args?: Record<string, { long_missile_support?: unknown }>;
+      };
+    };
+
+    const plan = cloned.plan;
+    if (!plan) return cloned;
+
+    delete plan.fleet_rules;
+    if (plan.node_defaults) {
+      delete plan.node_defaults.long_missile_support;
+    }
+    if (plan.node_args) {
+      for (const nodeArg of Object.values(plan.node_args)) {
+        if (!nodeArg) continue;
+        delete nodeArg.long_missile_support;
+      }
+    }
+
+    return cloned;
+  }
+
+  private static normalizeTaskStartResponse(payload: unknown): ApiResponse<TaskStartResult> {
+    const p = payload as ApiResponse<TaskStartResult> & { detail?: unknown };
+    if (typeof p?.success === 'boolean') return p;
+    return {
+      success: false,
+      error: ApiClient.formatValidationDetail(p?.detail),
+    };
+  }
+
   async taskStart(req: TaskRequest): Promise<ApiResponse<TaskStartResult>> {
-    return this.request('POST', '/api/task/start', req);
+    const first = await this.request('POST', '/api/task/start', req);
+    const firstNormalized = ApiClient.normalizeTaskStartResponse(first);
+    if (firstNormalized.success) return firstNormalized;
+
+    if (!ApiClient.shouldRetryTaskStartWithLegacyPayload(first)) {
+      return firstNormalized;
+    }
+
+    const legacyReq = ApiClient.makeLegacyTaskRequest(req);
+    Logger.warn('检测到后端 schema 不支持新字段，本次请求回退为兼容负载重试一次', 'api');
+    const retried = await this.request('POST', '/api/task/start', legacyReq);
+    return ApiClient.normalizeTaskStartResponse(retried);
   }
 
   async taskStop(): Promise<ApiResponse> {

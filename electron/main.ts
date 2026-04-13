@@ -65,6 +65,11 @@ function getConfiguredPythonPath(): string | null {
   return null;
 }
 
+function getUpdateMode(): 'auto' | 'manual' {
+  const settings = readGuiSettings();
+  return settings.update_mode === 'manual' ? 'manual' : 'auto';
+}
+
 let mainWindow: BrowserWindow | null = null;
 
 /** 是否处于打包后的生产模式 */
@@ -286,6 +291,15 @@ ipcMain.on('get-python-path-sync', (event) => {
   event.returnValue = getConfiguredPythonPath();
 });
 
+ipcMain.on('get-update-mode-sync', (event) => {
+  event.returnValue = getUpdateMode();
+});
+
+ipcMain.handle('set-update-mode', (_event, mode: 'auto' | 'manual') => {
+  const normalized = mode === 'manual' ? 'manual' : 'auto';
+  writeGuiSettings({ update_mode: normalized });
+});
+
 ipcMain.handle('set-python-path', (_event, pythonPath: string | null) => {
   writeGuiSettings({ python_path: pythonPath ?? '' });
   clearPythonCache(); // 清除缓存，下次查找时使用新路径
@@ -445,6 +459,7 @@ app.whenReady().then(() => {
     appRoot,
     sendProgress,
     getConfiguredPythonPath,
+    getUpdateMode,
     getTempDir: () => app.getPath('temp'),
   });
   initBackend({

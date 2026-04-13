@@ -352,6 +352,7 @@
                 <button id="fleet-preset-add" class="btn btn-xs btn-outline" title="新增编队">＋</button>
               </div>
             </div>
+            <p class="plan-task-hint" style="margin:0 0 6px">提示：后端暂不支持对第1分队自动改编。仅当所选预设确实需要改编队时，系统会自动改用第2分队并写入任务组配置。</p>
             <div id="fleet-preset-list" class="fleet-preset-list"></div>
           </div>
 
@@ -411,6 +412,16 @@
                 </div>
                 <button class="btn btn-small" id="btn-node-editor-close">✕</button>
               </div>
+              <div class="form-group form-row">
+                <label><input type="checkbox" id="node-edit-enabled" checked> 启用节点</label>
+              </div>
+              <p class="plan-task-hint" style="margin:-4px 0 8px">关闭后，该节点会从路线节点中移除。</p>
+              <div id="node-edit-detour-group" class="form-group form-row" style="display:none">
+                <label><input type="checkbox" id="node-edit-detour"> 迂回</label>
+                <span class="plan-task-hint">仅在可迂回节点生效</span>
+              </div>
+              <p id="node-editor-non-combat-note" class="plan-task-hint" style="display:none;margin:0 0 8px">该节点无战斗配置，仅支持启用/关闭。</p>
+              <div id="node-editor-combat-fields">
               <div class="form-group">
                 <label>阵型</label>
                 <select id="node-edit-formation" class="input">
@@ -430,6 +441,7 @@
                 <label>索敌规则</label>
                 <textarea id="node-edit-rules" class="input node-rules-textarea" rows="2"
                   placeholder="每行一条，如: DD >= 1, 4&#10;多条件用 and 连接: DD >= 1 and CL >= 2, 4"></textarea>
+              </div>
               </div>
               <button class="btn btn-primary btn-small" id="btn-node-edit-save">应用</button>
             </div>
@@ -574,6 +586,21 @@
 
       <!-- ═══ 右列：自动化设置 ═══ -->
       <div class="config-col-right">
+
+      <div class="card config-card-update">
+        <h3>更新设置</h3>
+        <div class="form-group" style="margin-bottom:0">
+          <label>更新模式</label>
+          <div class="input-row config-runtime-row">
+            <select id="cfg-update-mode" class="input">
+              <option value="auto">自动更新（启动时自动检查）</option>
+              <option value="manual">手动更新（仅在点击按钮时检查）</option>
+            </select>
+            <button class="btn btn-small" id="btn-check-updates">立即检查更新</button>
+          </div>
+          <span class="config-hint">手动模式下，不会在启动时自动检查或自动下载更新。</span>
+        </div>
+      </div>
 
       <div class="card config-card-auto">
         <h3>自动化设置</h3>
@@ -791,6 +818,7 @@
               <option value="3">第 3 舰队</option>
               <option value="4">第 4 舰队</option>
             </select>
+            <p class="config-hint" style="margin:4px 0 0;font-size:11px">若后续使用编队预设触发自动改编，第1分队将自动切换为第2分队（并写入任务组配置）。</p>
           </div>
           <div class="form-group">
             <label><input type="checkbox" id="tpl-fleet-enable-nf"> 设置编队舰船</label>

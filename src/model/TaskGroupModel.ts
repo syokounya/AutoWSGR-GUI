@@ -32,6 +32,8 @@ export interface TaskGroupItem {
   chapter?: number;
   /** 编队预设索引（plan 类型条目指定默认使用的编队预设） */
   fleetPresetIndex?: number;
+  /** 是否因“第一分队不支持自动编队”而自动切换到第二分队 */
+  autoFleetFallback?: boolean;
 }
 
 /** 一个任务组 */

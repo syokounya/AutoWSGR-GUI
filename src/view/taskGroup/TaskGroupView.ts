@@ -16,6 +16,8 @@ export interface TaskGroupItemMeta {
   typeLabel?: string;
   /** 编队舰船列表 */
   fleet?: string[];
+  /** 是否因自动编队限制自动切到第二分队 */
+  autoFleetFallback?: boolean;
 }
 
 /** 渲染所需的 VO */
@@ -132,6 +134,7 @@ export class TaskGroupView {
       if (meta.typeLabel) parts.push(meta.typeLabel);
       if (meta.mapName) parts.push(meta.mapName);
       if (meta.fleetId) parts.push(`编队${meta.fleetId}`);
+      if (meta.autoFleetFallback) parts.push('自动编队→2队');
       if (meta.repairMode) parts.push(meta.repairMode);
       if (meta.fleet && meta.fleet.length > 0) {
         parts.push(meta.fleet.filter(Boolean).join(' / '));

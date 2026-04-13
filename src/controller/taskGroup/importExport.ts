@@ -66,12 +66,54 @@ export async function importTaskGroupFlow(
   for (const raw of data.items) {
     if (!raw || typeof raw !== 'object') continue;
     const item = raw as Record<string, unknown>;
-    if (typeof item.path !== 'string' || typeof item.kind !== 'string') continue;
+    if (typeof item.kind !== 'string') continue;
+
+    const times = typeof item.times === 'number' && item.times > 0 ? item.times : 1;
+    const fleetId = typeof item.fleet_id === 'number' && item.fleet_id >= 1 && item.fleet_id <= 4
+      ? item.fleet_id
+      : undefined;
+    const fleetPresetIndex = typeof item.fleetPresetIndex === 'number' && item.fleetPresetIndex >= 0
+      ? Math.floor(item.fleetPresetIndex)
+      : undefined;
+    const forceRetry = typeof item.forceRetry === 'boolean' ? item.forceRetry : undefined;
+    const allowPolling = typeof item.allowPolling === 'boolean' ? item.allowPolling : undefined;
+    const autoFleetFallback = typeof item.autoFleetFallback === 'boolean' ? item.autoFleetFallback : undefined;
+
+    if (item.kind === 'template') {
+      if (typeof item.templateId !== 'string' || !item.templateId.trim()) continue;
+      const label = typeof item.label === 'string' && item.label.trim()
+        ? item.label
+        : item.templateId;
+      taskGroupModel.addItem(groupName, {
+        templateId: item.templateId,
+        kind: 'template',
+        times,
+        label,
+        campaignName: typeof item.campaignName === 'string' ? item.campaignName : undefined,
+        chapter: typeof item.chapter === 'number' ? item.chapter : undefined,
+        fleet_id: fleetId,
+        forceRetry,
+        allowPolling,
+      });
+      continue;
+    }
+
+    if (typeof item.path !== 'string') continue;
+    const kind = item.kind === 'preset' ? 'preset' : 'plan';
+    const label = typeof item.label === 'string' && item.label.trim()
+      ? item.label
+      : item.path.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? String(item.path);
+
     taskGroupModel.addItem(groupName, {
       path: item.path,
-      kind: item.kind === 'preset' ? 'preset' : 'plan',
-      times: typeof item.times === 'number' && item.times > 0 ? item.times : 1,
-      label: typeof item.label === 'string' ? item.label : item.path.split(/[\\/]/).pop()?.replace(/\.ya?ml$/i, '') ?? String(item.path),
+      kind,
+      times,
+      label,
+      fleet_id: fleetId,
+      fleetPresetIndex,
+      forceRetry,
+      allowPolling,
+      autoFleetFallback,
     });
   }
 

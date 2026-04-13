@@ -39,6 +39,7 @@ export async function loadItemMetas(
       if (!parsed || typeof parsed !== 'object') return null;
 
       const meta: TaskGroupItemMeta = {};
+      if (item.autoFleetFallback) meta.autoFleetFallback = true;
 
       if ('chapter' in parsed && 'map' in parsed) {
         const ch = Number(parsed.chapter);

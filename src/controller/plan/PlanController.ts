@@ -8,7 +8,7 @@ import type { CombatPlanReq, NodeDecisionReq, NormalFightReq } from '../../types
 import type { Scheduler } from '../../model/scheduler';
 import { TaskPriority } from '../../model/scheduler';
 import type { NodeArgs, TaskPreset } from '../../types/model';
-import { getNodeType, isNightNode } from '../../model/MapDataLoader';
+import { getNodeType, isNightNode, isDetourNode } from '../../model/MapDataLoader';
 import type { MapData } from '../../model/MapDataLoader';
 import { toBackendName, resolveFleetPreset, resolveFleetPresetRules, shipSlotLabel } from '../../data/shipData';
 import { Logger } from '../../utils/Logger';
@@ -88,21 +88,20 @@ export class PlanController {
       if (!this.currentPlan) return;
       const mapData = this.currentMapData;
       const nodeType = mapData ? getNodeType(mapData, nodeId) : 'Normal';
-      const NON_COMBAT: Set<string> = new Set(['Start', 'Resource', 'Penalty']);
-      if (NON_COMBAT.has(nodeType)) {
-        this.editingNodeId = null;
-        this.planView.showNodeInfo(nodeId, nodeType);
-        return;
-      }
       this.editingNodeId = nodeId;
       const args = this.currentPlan.getNodeArgs(nodeId);
       const rulesText = (args.enemy_rules ?? []).map(r => `${r[0]}, ${r[1]}`).join('\n');
       const mapNight = this.currentMapData ? isNightNode(this.currentMapData, nodeId) : false;
+      const isEnabled = this.currentPlan.data.selected_nodes.includes(nodeId);
+      const canDetour = this.currentMapData ? isDetourNode(this.currentMapData, nodeId) : false;
       this.planView.showNodeEditor(nodeId, nodeType as any, {
+        enabled: isEnabled,
         formation: args.formation ?? 2,
         night: args.night ?? false,
         longMissileSupport: args.long_missile_support ?? false,
         proceed: args.proceed ?? true,
+        detour: args.detour ?? false,
+        canDetour,
         enemyRules: rulesText,
       }, mapNight);
     };
@@ -216,6 +215,7 @@ export class PlanController {
     if (args.night != null) mapped.night = args.night;
     if (args.long_missile_support != null) mapped.long_missile_support = args.long_missile_support;
     if (args.proceed != null) mapped.proceed = args.proceed;
+    if (args.detour != null) mapped.detour = args.detour;
     if (args.proceed_stop != null) mapped.proceed_stop = args.proceed_stop;
     if (args.enemy_rules && args.enemy_rules.length > 0) {
       mapped.enemy_rules = args.enemy_rules.map(([cond, action]) => [String(cond), String(action)]);
@@ -260,6 +260,8 @@ export class PlanController {
     const stopCondition = plan.data.stop_condition;
     const selectedPresets = this.planView.getSelectedPresets();
     const firstPreset = selectedPresets.length > 0 ? selectedPresets[0] : undefined;
+    const configuredFleetId = plan.data.fleet_id ?? 1;
+    let effectiveFleetId = configuredFleetId;
 
     const req: NormalFightReq = { type: 'normal_fight', times: 1, gap: plan.data.gap ?? 0 };
 
@@ -278,15 +280,20 @@ export class PlanController {
     if (firstPreset && firstPreset.ships.length > 0) {
       const resolved = resolveFleetPreset(firstPreset.ships);
       if (resolved.length > 0) {
+        if (configuredFleetId === 1) {
+          // 后端不支持对第一分队自动改编，运行时自动切换到第二分队。
+          effectiveFleetId = 2;
+          Logger.warn('检测到自动编队请求且当前为第1分队，已自动切换为第2分队执行本次任务');
+        }
         if (!req.plan) req.plan = {};
         req.plan.fleet = resolved.map(toBackendName);
-        req.plan.fleet_id = plan.data.fleet_id;
+        req.plan.fleet_id = effectiveFleetId;
         req.plan.fleet_rules = resolveFleetPresetRules(firstPreset.ships);
       }
     }
 
     const bathRepairConfig = this.planView.getBathRepairConfig();
-    const fleetId = plan.data.fleet_id ?? 1;
+    const fleetId = effectiveFleetId;
     const fleetPresets = selectedPresets.length > 1 ? selectedPresets : undefined;
     const currentPresetIndex = fleetPresets ? 0 : undefined;
 

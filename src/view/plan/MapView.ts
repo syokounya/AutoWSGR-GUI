@@ -129,14 +129,12 @@ export class MapView {
     }
     chip.dataset['nodeId'] = node.id;
     chip.innerHTML = `<span class="map-node-id">${escapeHtml(node.id)}</span>`;
-
-    if (isSelected) {
-      chip.addEventListener('click', () => {
-        this.nodeListEl.querySelectorAll('.map-node,.node-chip').forEach(c => c.classList.remove('selected'));
-        chip.classList.add('selected');
-        this.onNodeClick?.(node.id);
-      });
-    }
+    chip.title = isSelected ? '已启用节点，点击编辑' : '未启用节点，点击配置并启用';
+    chip.addEventListener('click', () => {
+      this.nodeListEl.querySelectorAll('.map-node,.node-chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      this.onNodeClick?.(node.id);
+    });
 
     return chip;
   }

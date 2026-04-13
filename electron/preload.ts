@@ -16,6 +16,14 @@ contextBridge.exposeInMainWorld('electronBridge', {
     return ipcRenderer.invoke('set-backend-port', port);
   },
 
+  getUpdateMode: () => {
+    return ipcRenderer.sendSync('get-update-mode-sync') as 'auto' | 'manual';
+  },
+
+  setUpdateMode: (mode: 'auto' | 'manual') => {
+    return ipcRenderer.invoke('set-update-mode', mode);
+  },
+
   openDirectoryDialog: (title?: string) => {
     return ipcRenderer.invoke('open-directory-dialog', title);
   },

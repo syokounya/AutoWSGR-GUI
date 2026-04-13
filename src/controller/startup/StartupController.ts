@@ -103,6 +103,6 @@ export class StartupController {
 
   /** 代理: 启动系统 */
   startSystem(): void {
-    import('./connection').then(m => m.startSystem(this.host));
+    import('./connection.js').then(m => m.startSystem(this.host));
   }
 }

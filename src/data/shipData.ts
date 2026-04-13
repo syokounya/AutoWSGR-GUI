@@ -207,13 +207,12 @@ export function resolveFleetPresetRules(ships: ShipSlot[]): Array<string | Fleet
       const searchName = String(slot.name).trim();
       if (searchName) rule.search_name = searchName;
     }
-    // TODO: 后端支持等级筛选后，再恢复下发 min_level / max_level。
-    // if (slot.min_level != null && Number.isFinite(slot.min_level)) {
-    //   rule.min_level = Math.max(1, Math.floor(slot.min_level));
-    // }
-    // if (slot.max_level != null && Number.isFinite(slot.max_level)) {
-    //   rule.max_level = Math.max(1, Math.floor(slot.max_level));
-    // }
+    if (slot.min_level != null && Number.isFinite(slot.min_level)) {
+      rule.min_level = Math.max(1, Math.floor(slot.min_level));
+    }
+    if (slot.max_level != null && Number.isFinite(slot.max_level)) {
+      rule.max_level = Math.max(1, Math.floor(slot.max_level));
+    }
     rules.push(rule);
 
     // 预留首选项，尽量避免后续槽位重复选中同名舰船。

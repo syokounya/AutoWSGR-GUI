@@ -47,33 +47,12 @@ async function ensureVCRedist(): Promise<void> {
 /** 环境就绪标记文件路径 */
 export const ENV_READY_MARKER = () => path.join(getCtx().appRoot(), '.env_ready');
 
-/** 最低 autowsgr 版本要求 */
-const MIN_AUTOWSGR_VERSION = [2, 1, 9, 5];
-
-/** 检查 autowsgr 版本是否满足最低要求 */
-function isVersionOk(ver: string): boolean {
-  const parts = ver
-    .replace(/[^0-9.]/g, '.')
-    .split('.')
-    .filter(Boolean)
-    .map(Number)
-    .filter((v) => Number.isFinite(v));
-  const maxLen = Math.max(parts.length, MIN_AUTOWSGR_VERSION.length);
-  for (let i = 0; i < maxLen; i++) {
-    const current = parts[i] || 0;
-    const required = MIN_AUTOWSGR_VERSION[i] || 0;
-    if (current > required) return true;
-    if (current < required) return false;
-  }
-  return true;
-}
-
 /** 读取标记文件中保存的 autowsgr 版本；标记不存在或无效时返回 null */
 function readEnvMarker(): { pythonCmd: string; pythonVersion: string; autowsgrVersion: string } | null {
   const ctx = getCtx();
   try {
     const data = JSON.parse(fs.readFileSync(ENV_READY_MARKER(), 'utf-8'));
-    if (data && data.pythonCmd && data.autowsgrVersion && isVersionOk(data.autowsgrVersion)) {
+    if (data && data.pythonCmd && data.autowsgrVersion) {
       // 确保记录的 python 路径仍然存在
       if (!fs.existsSync(data.pythonCmd)) return null;
       // 若用户切换了 Python 路径，旧标记自动失效
@@ -109,6 +88,11 @@ function buildAutoUpdateDeps(): AutoUpdateDeps {
   };
 }
 
+function shouldAutoUpdate(): boolean {
+  const ctx = getCtx();
+  return ctx.getUpdateMode() !== 'manual';
+}
+
 // ════════════════════════════════════════
 // 环境检查主流程
 // ════════════════════════════════════════
@@ -126,11 +110,16 @@ export async function checkEnvironment(): Promise<EnvCheckResult> {
     const certFile = await ensureSslCertForPython(marker.pythonCmd);
     if (certFile) ctx.sendProgress(`TLS 证书已就绪: ${certFile}`);
     else ctx.sendProgress('WARNING 未检测到 TLS 根证书，后续联网操作可能失败');
-    // 每次启动检查并自动更新 autowsgr
-    const updatedVer = await autoUpdateAutowsgr(marker.pythonCmd, buildAutoUpdateDeps());
-    const finalVer = updatedVer ?? marker.autowsgrVersion;
-    if (updatedVer && updatedVer !== marker.autowsgrVersion) {
-      writeEnvMarker(marker.pythonCmd, marker.pythonVersion, finalVer);
+    // 每次启动检查并自动更新 autowsgr（可由更新模式关闭）
+    let finalVer = marker.autowsgrVersion;
+    if (shouldAutoUpdate()) {
+      const updatedVer = await autoUpdateAutowsgr(marker.pythonCmd, buildAutoUpdateDeps());
+      finalVer = updatedVer ?? marker.autowsgrVersion;
+      if (updatedVer && updatedVer !== marker.autowsgrVersion) {
+        writeEnvMarker(marker.pythonCmd, marker.pythonVersion, finalVer);
+      }
+    } else {
+      ctx.sendProgress('手动更新模式：跳过 autowsgr 自动更新检查');
     }
     ctx.sendProgress(`环境就绪 (${marker.pythonVersion}, autowsgr ${finalVer}) ✓`);
     return {
@@ -205,13 +194,8 @@ export async function checkEnvironment(): Promise<EnvCheckResult> {
 
     if (depResult.autowsgr != null) {
       const ver = String(depResult.autowsgr);
-      if (isVersionOk(ver)) {
-        ctx.sendProgress(`  autowsgr ${ver} \u2713`);
-        autowsgrVersion = ver;
-      } else {
-        ctx.sendProgress(`  autowsgr ${ver} < ${MIN_AUTOWSGR_VERSION.join('.')} \u2717`);
-        missingPackages.push('autowsgr');
-      }
+      ctx.sendProgress(`  autowsgr ${ver} \u2713`);
+      autowsgrVersion = ver;
     } else {
       missingPackages.push('autowsgr');
       ctx.sendProgress(`  autowsgr \u2717`);
@@ -235,9 +219,14 @@ export async function checkEnvironment(): Promise<EnvCheckResult> {
       ctx.sendProgress('ADB (内置) ✗  将使用模拟器自带 ADB');
     }
 
-    // 检查并自动更新 autowsgr
-    const updatedVer = await autoUpdateAutowsgr(pythonCmd, buildAutoUpdateDeps());
-    const finalVer = updatedVer || autowsgrVersion;
+    // 检查并自动更新 autowsgr（可由更新模式关闭）
+    let finalVer = autowsgrVersion;
+    if (shouldAutoUpdate()) {
+      const updatedVer = await autoUpdateAutowsgr(pythonCmd, buildAutoUpdateDeps());
+      finalVer = updatedVer || autowsgrVersion;
+    } else {
+      ctx.sendProgress('手动更新模式：跳过 autowsgr 自动更新检查');
+    }
     writeEnvMarker(pythonCmd, pythonVersion || '', finalVer);
   }
 

@@ -160,6 +160,7 @@ export class PlanModel {
     if (args.night != null) out.night = args.night;
     if (args.long_missile_support != null) out.long_missile_support = args.long_missile_support;
     if (args.proceed != null) out.proceed = args.proceed;
+    if (args.detour != null) out.detour = args.detour;
     if (args.SL_when_detour_fails != null) out.SL_when_detour_fails = args.SL_when_detour_fails;
     if (args.enemy_rules && args.enemy_rules.length > 0) out.enemy_rules = args.enemy_rules;
     if (args.proceed_stop) out.proceed_stop = args.proceed_stop;

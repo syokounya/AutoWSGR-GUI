@@ -109,7 +109,7 @@ export interface PlanPreviewViewObject {
 /** 编队预设 VO */
 export interface FleetPresetVO {
   name: string;
-  ships: import('./model').ShipSlot[];
+  ships: import('./model.js').ShipSlot[];
 }
 
 // ════════════════════════════════════════
@@ -121,6 +121,7 @@ export interface ConfigViewObject {
   emulatorPath: string;
   emulatorSerial: string;
   gameApp: string;
+  updateMode: 'auto' | 'manual';
   autoExpedition: boolean;
   expeditionInterval: number;
   autoBattle: boolean;

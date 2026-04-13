@@ -18,6 +18,7 @@ export interface NodeArgs {
   /** 是否开启远程打击（导潜等可远程打击舰船） */
   long_missile_support?: boolean;
   proceed?: boolean;
+  detour?: boolean;
   proceed_stop?: number[];         // 6 个元素
   SL_when_detour_fails?: boolean;
 }

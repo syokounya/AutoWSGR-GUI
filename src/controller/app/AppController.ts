@@ -318,6 +318,10 @@ export class AppController {
       finally { this.configView.setPythonValidateLoading(false); }
     });
 
+    document.getElementById('btn-check-updates')?.addEventListener('click', async () => {
+      await this.checkUpdatesManually();
+    });
+
     document.getElementById('btn-check-adb')?.addEventListener('click', async () => {
       const bridge = window.electronBridge;
       if (!bridge?.checkAdbDevices) return;
@@ -444,6 +448,81 @@ export class AppController {
       }
     } catch {
       this.configView.setAdbStatus('检测失败（后端未启动？）', 'offline');
+    }
+  }
+
+  private async checkUpdatesManually(): Promise<void> {
+    const bridge = window.electronBridge;
+    if (!bridge) return;
+    const updateMode = bridge.getUpdateMode?.() ?? 'auto';
+
+    const btn = document.getElementById('btn-check-updates') as HTMLButtonElement | null;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '检查中…';
+    }
+
+    try {
+      try {
+        const updates = await bridge.checkUpdates();
+        if (updates.hasUpdates) {
+          const confirmed = await showConfirm(
+            '后端更新',
+            `发现后端可更新，是否立即拉取并更新？`,
+          );
+          if (confirmed) {
+            const pull = await bridge.pullUpdates();
+            if (pull.success) {
+              Logger.info('后端更新完成');
+            } else {
+              Logger.warn(`后端更新失败: ${pull.output || '未知错误'}`);
+            }
+          } else {
+            Logger.info('已取消后端更新');
+          }
+        } else {
+          Logger.info('后端已是最新版本');
+        }
+      } catch {
+        Logger.warn('后端更新检查失败');
+      }
+
+      try {
+        const guiUpdate = await bridge.checkGuiUpdates?.();
+        if (updateMode === 'auto') {
+          if (guiUpdate?.version) {
+            Logger.info(`检测到 GUI 新版本 v${guiUpdate.version}，自动模式下将自动下载`);
+          } else {
+            Logger.info('GUI 已是最新版本');
+          }
+          return;
+        }
+        if (guiUpdate?.version) {
+          const confirmed = await showConfirm(
+            'GUI 更新',
+            `发现 GUI 新版本 v${guiUpdate.version}，是否立即下载？`,
+          );
+          if (confirmed) {
+            const result = await bridge.downloadGuiUpdate?.();
+            if (result?.success) {
+              Logger.info(`GUI 更新下载开始: v${guiUpdate.version}`);
+            } else {
+              Logger.warn(`GUI 更新下载失败: ${result?.message || '未知错误'}`);
+            }
+          } else {
+            Logger.info('已取消 GUI 更新下载');
+          }
+        } else {
+          Logger.info('GUI 已是最新版本');
+        }
+      } catch {
+        Logger.warn('GUI 更新检查失败');
+      }
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '立即检查更新';
+      }
     }
   }
 

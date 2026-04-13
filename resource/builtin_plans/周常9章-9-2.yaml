@@ -11,8 +11,6 @@ selected_nodes:
   - H
   - M
   - O
-  - E
-  - K
 fleet_id: 1
 fight_condition: 1
 repair_mode: 1
@@ -24,48 +22,20 @@ node_defaults:
 
 node_args:
   A:
-    enemy_rules:
-      - - AP >= 1
-        - 4
-      - - AP < 1
-        - detour
+    detour: true
   D:
-    enemy_rules:
-      - - AP >= 1
-        - 4
-      - - AP < 1
-        - detour
+    detour: true
   G:
-    enemy_rules:
-      - - AP >= 1
-        - 4
-      - - AP < 1
-        - detour
+    detour: true
   H:
-    enemy_rules:
-      - - AP >= 1
-        - 4
-      - - AP < 1
-        - detour
+    detour: true
   M:
-    enemy_rules:
-      - - AP >= 1
-        - 4
-      - - AP < 1
-        - detour
-  E:
-    enemy_rules:
-      - - AP < 1
-        - retreat
-  K:
-    enemy_rules:
-      - - AP < 1
-        - retreat
+    detour: true
   O:
+    formation: 4
     night: true
-    enemy_rules:
-      - - AP < 1
-        - retreat
+    proceed: true
+    detour: false
 
 fleet_presets:
   - name: 传统AIII双装母

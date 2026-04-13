@@ -40,6 +40,8 @@ export interface ElectronBridge {
   getAppVersion: () => string;
   getBackendPort: () => number;
   setBackendPort: (port: number) => Promise<void>;
+  getUpdateMode: () => 'auto' | 'manual';
+  setUpdateMode: (mode: 'auto' | 'manual') => Promise<void>;
   getPythonPath: () => string | null;
   setPythonPath: (pythonPath: string | null) => Promise<void>;
   validatePython: (pythonPath: string) => Promise<{ valid: boolean; version: string | null; error?: string }>;

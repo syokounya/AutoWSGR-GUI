@@ -7,6 +7,7 @@ export interface PythonEnvContext {
   appRoot: () => string;
   sendProgress: (msg: string) => void;
   getConfiguredPythonPath: () => string | null;
+  getUpdateMode: () => 'auto' | 'manual';
   getTempDir: () => string;
 }
 

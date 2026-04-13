@@ -1,5 +1,5 @@
 import type { MapNodeType } from '../../types/view';
-import { NODE_TYPE_ICON, NODE_TYPE_ICON_NIGHT, NODE_TYPE_NAME, escapeHtml } from './MapView';
+import { NODE_TYPE_ICON, NODE_TYPE_ICON_NIGHT, NODE_TYPE_NAME, NON_COMBAT_TYPES, escapeHtml } from './MapView';
 
 export class NodeEditorView {
   private editorEl: HTMLElement;
@@ -14,8 +14,9 @@ export class NodeEditorView {
     this.infoEl = document.getElementById('node-info')!;
   }
 
-  show(nodeId: string, nodeType: MapNodeType, args: { formation: number; night: boolean; longMissileSupport: boolean; proceed: boolean; enemyRules: string }, mapNight = false): void {
+  show(nodeId: string, nodeType: MapNodeType, args: { enabled: boolean; formation: number; night: boolean; longMissileSupport: boolean; proceed: boolean; detour: boolean; canDetour: boolean; enemyRules: string }, mapNight = false): void {
     this.infoEl.style.display = 'none';
+    const isCombatNode = !NON_COMBAT_TYPES.has(nodeType);
 
     const isNightBattle = mapNight && nodeType === 'Normal';
     const icon = isNightBattle ? NODE_TYPE_ICON_NIGHT : (NODE_TYPE_ICON[nodeType] || '');
@@ -32,6 +33,23 @@ export class NodeEditorView {
       typeSpan.textContent = typeName;
     }
     this.editorIdEl.textContent = nodeId;
+    (document.getElementById('node-edit-enabled') as HTMLInputElement).checked = args.enabled;
+
+    const detourGroup = document.getElementById('node-edit-detour-group') as HTMLElement;
+    const detourInput = document.getElementById('node-edit-detour') as HTMLInputElement;
+    if (args.canDetour) {
+      detourGroup.style.display = '';
+      detourInput.checked = args.detour;
+    } else {
+      detourGroup.style.display = 'none';
+      detourInput.checked = false;
+    }
+
+    const combatFields = document.getElementById('node-editor-combat-fields') as HTMLElement;
+    const nonCombatHint = document.getElementById('node-editor-non-combat-note') as HTMLElement;
+    combatFields.style.display = isCombatNode ? '' : 'none';
+    nonCombatHint.style.display = isCombatNode ? 'none' : '';
+
     (document.getElementById('node-edit-formation') as HTMLSelectElement).value = String(args.formation);
     const nightCheckbox = document.getElementById('node-edit-night') as HTMLInputElement;
     if (mapNight && nodeType === 'Normal') {
@@ -82,12 +100,14 @@ export class NodeEditorView {
     this.placeholderEl.style.display = '';
   }
 
-  collectValues(): { formation: number; night: boolean; longMissileSupport: boolean; proceed: boolean; rulesText: string } {
+  collectValues(): { enabled: boolean; formation: number; night: boolean; longMissileSupport: boolean; proceed: boolean; detour: boolean; rulesText: string } {
     return {
+      enabled: (document.getElementById('node-edit-enabled') as HTMLInputElement).checked,
       formation: parseInt((document.getElementById('node-edit-formation') as HTMLSelectElement).value, 10),
       night: (document.getElementById('node-edit-night') as HTMLInputElement).checked,
       longMissileSupport: (document.getElementById('node-edit-long-missile-support') as HTMLInputElement).checked,
       proceed: (document.getElementById('node-edit-proceed') as HTMLInputElement).checked,
+      detour: (document.getElementById('node-edit-detour') as HTMLInputElement).checked,
       rulesText: (document.getElementById('node-edit-rules') as HTMLTextAreaElement).value,
     };
   }

@@ -5,6 +5,17 @@ import type { ElectronBridge } from '../../types/electronBridge';
 import type { StartupHost } from './StartupController';
 import { Logger } from '../../utils/Logger';
 
+function getUpdateMode(bridge?: ElectronBridge): 'auto' | 'manual' {
+  const fromBridge = bridge?.getUpdateMode?.();
+  if (fromBridge === 'manual') return 'manual';
+  if (fromBridge === 'auto') return 'auto';
+  try {
+    return localStorage.getItem('updateMode') === 'manual' ? 'manual' : 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
 /** 检查 Python 环境, 缺失时自动安装本地便携版 */
 export async function checkAndPrepareEnv(bridge: ElectronBridge): Promise<boolean> {
   Logger.info('正在检查运行环境…');
@@ -75,14 +86,20 @@ export async function runSetupScript(bridge: ElectronBridge): Promise<boolean> {
 
 /** 检查更新 (非阻塞, 仅日志提示) */
 export async function checkForUpdates(bridge: ElectronBridge, host: StartupHost): Promise<void> {
+  const updateMode = getUpdateMode(bridge);
+
+  initGuiAutoUpdate(bridge, host);
+  if (updateMode === 'manual') {
+    Logger.info('当前为手动更新模式，已跳过启动自动更新检查');
+    return;
+  }
+
   try {
     const updates = await bridge.checkUpdates();
     if (updates.hasUpdates) {
       Logger.warn(`发现 ${updates.behindCount} 个新提交可更新，可通过「配置 → 检查更新」拉取`);
     }
   } catch { /* 忽略 */ }
-
-  initGuiAutoUpdate(bridge, host);
 }
 
 /** 初始化 GUI 自动更新监听 + 首次检查 */
@@ -90,8 +107,13 @@ function initGuiAutoUpdate(bridge: ElectronBridge, host: StartupHost): void {
   if (!bridge.onUpdateStatus) return;
 
   bridge.onUpdateStatus((status) => {
+    const updateMode = getUpdateMode(bridge);
     switch (status.status) {
       case 'available':
+        if (updateMode === 'manual') {
+          Logger.warn(`发现 GUI 新版本 v${status.version}，当前为手动更新模式，请点击「立即检查更新」后手动下载`);
+          break;
+        }
         Logger.info(`发现 GUI 新版本 v${status.version}，正在自动下载增量更新…`);
         bridge.downloadGuiUpdate?.();
         break;
@@ -111,6 +133,7 @@ function initGuiAutoUpdate(bridge: ElectronBridge, host: StartupHost): void {
   });
 
   setTimeout(() => {
+    if (getUpdateMode(bridge) === 'manual') return;
     bridge.checkGuiUpdates?.().catch(() => {});
   }, 5000);
 }

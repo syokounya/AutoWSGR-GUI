@@ -49,7 +49,10 @@ export async function loadGroupToQueue(
           req.plan = req.plan ?? {};
           req.plan.selected_nodes = [...plan.data.selected_nodes];
         }
-        const selectedFleetId = item.fleet_id ?? plan.data.fleet_id;
+        let selectedFleetId = item.fleet_id ?? plan.data.fleet_id;
+        if (item.autoFleetFallback && selectedFleetId === 1) {
+          selectedFleetId = 2;
+        }
         if (selectedFleetId != null) {
           req.plan = req.plan ?? {};
           req.plan.fleet_id = selectedFleetId;
@@ -176,7 +179,10 @@ export async function loadSingleItemToQueue(
         req.plan = req.plan ?? {};
         req.plan.selected_nodes = [...plan.data.selected_nodes];
       }
-      const selectedFleetId = item.fleet_id ?? plan.data.fleet_id;
+      let selectedFleetId = item.fleet_id ?? plan.data.fleet_id;
+      if (item.autoFleetFallback && selectedFleetId === 1) {
+        selectedFleetId = 2;
+      }
       if (selectedFleetId != null) {
         req.plan = req.plan ?? {};
         req.plan.fleet_id = selectedFleetId;

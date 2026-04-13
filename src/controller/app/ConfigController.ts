@@ -52,6 +52,8 @@ export class ConfigController {
       emulatorPath: cfg.emulator.path || '',
       emulatorSerial: cfg.emulator.serial || '',
       gameApp: cfg.account.game_app,
+      updateMode: window.electronBridge?.getUpdateMode?.()
+        ?? (localStorage.getItem('updateMode') === 'manual' ? 'manual' : 'auto'),
       autoExpedition: cfg.daily_automation.auto_expedition,
       expeditionInterval: cfg.daily_automation.expedition_interval,
       autoBattle: cfg.daily_automation.auto_battle,
@@ -84,8 +86,13 @@ export class ConfigController {
     localStorage.setItem('themeMode', collected.themeMode);
     localStorage.setItem('accentColor', collected.accentColor);
     localStorage.setItem('debugMode', String(collected.debugMode));
+    localStorage.setItem('updateMode', collected.updateMode);
     this.host.mainView.setDebugMode(collected.debugMode);
     applyTheme();
+
+    if (window.electronBridge?.setUpdateMode) {
+      await window.electronBridge.setUpdateMode(collected.updateMode);
+    }
 
     // 后端端口 / Python 路径（修改后需重启）
     if (window.electronBridge?.setBackendPort) {

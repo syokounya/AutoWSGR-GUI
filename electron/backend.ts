@@ -16,7 +16,6 @@ export interface BackendContext {
   appRoot: () => string;
   resourceRoot: () => string;
   BACKEND_PORT: number;
-  getLocalBackendRepoPath: () => string | null;
   getMainWindow: () => BrowserWindow | null;
 }
 
@@ -93,10 +92,6 @@ export async function startBackend(): Promise<void> {
 
   const cwd = ctx.appRoot();
   const localSite = localSitePackages();
-  const localBackendRepo = ctx.getLocalBackendRepoPath();
-  if (localBackendRepo) {
-    console.log(`[Backend] 本地后端源码优先加载: ${localBackendRepo}`);
-  }
 
   const pyLiteral = (value: string): string => value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
@@ -106,20 +101,12 @@ export async function startBackend(): Promise<void> {
   // 3. 绕过嵌入式 Python 的 ._pth/PYTHONPATH 限制
   const bootstrapParts = [
     `import sys, os, site`,
-  ];
-
-  if (localBackendRepo) {
-    bootstrapParts.push(`local_repo = r'${pyLiteral(localBackendRepo)}'`);
-    bootstrapParts.push(`sys.path.insert(0, local_repo)`);
-  }
-
-  bootstrapParts.push(
     `sp = r'${pyLiteral(localSite)}'`,
     `sys.path.insert(0, sp)`,
     `site.addsitedir(sp)`,  // 处理 .pth 文件，激活 _distutils_hack
     `import uvicorn`,
     `uvicorn.run('autowsgr.server.main:app', host='127.0.0.1', port=${ctx.BACKEND_PORT})`,
-  );
+  ];
 
   const bootstrap = bootstrapParts.join('; ');
 

@@ -5,7 +5,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import { exec, execSync } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
 import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater';
 import {
@@ -18,26 +18,6 @@ import { detectEmulator } from './emulatorDetect';
 import { initBackend, getBackendProcess, startBackend, stopBackend, runSetupScript } from './backend';
 
 const execAsync = promisify(exec);
-
-/**
- * 读取 Windows 用户级环境变量（不依赖当前进程环境快照）。
- *
- * 用于处理 setx 后未重启 VS Code / Electron 的场景。
- */
-function readWindowsUserEnv(name: string): string {
-  if (process.platform !== 'win32') return '';
-  try {
-    const output = execSync(`reg query HKCU\\Environment /v ${name}`, {
-      encoding: 'utf-8',
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }) as string;
-    const m = output.match(new RegExp(`${name}\\s+REG_\\w+\\s+(.+)`, 'i'));
-    return m && m[1] ? m[1].trim() : '';
-  } catch {
-    return '';
-  }
-}
 
 /** GUI 设置文件路径（延迟到 app ready 后才有效，先用函数） */
 function guiSettingsPath(): string {
@@ -83,32 +63,6 @@ function getConfiguredPythonPath(): string | null {
     return settings.python_path;
   }
   return null;
-}
-
-/**
- * 本地后端源码目录（开发联调）：
- * 环境变量 `AUTOWSGR_LOCAL_BACKEND` > gui_settings.local_backend_repo。
- *
- * 要求目录下存在 `autowsgr/__init__.py`，否则视为无效配置。
- */
-function getConfiguredLocalBackendRepoPath(): string | null {
-  const envPath = (process.env.AUTOWSGR_LOCAL_BACKEND || '').trim();
-  const userEnvPath = envPath ? '' : readWindowsUserEnv('AUTOWSGR_LOCAL_BACKEND');
-  const settings = readGuiSettings();
-  const settingsPath =
-    typeof settings.local_backend_repo === 'string'
-      ? settings.local_backend_repo.trim()
-      : '';
-
-  const candidate = envPath || userEnvPath || settingsPath;
-  if (!candidate) return null;
-
-  const pkgInit = path.join(candidate, 'autowsgr', '__init__.py');
-  if (!fs.existsSync(pkgInit)) {
-    console.warn(`[Main] local backend repo 无效，未找到 ${pkgInit}`);
-    return null;
-  }
-  return candidate;
 }
 
 function getUpdateMode(): 'auto' | 'manual' {
@@ -351,15 +305,6 @@ ipcMain.handle('set-python-path', (_event, pythonPath: string | null) => {
   clearPythonCache(); // 清除缓存，下次查找时使用新路径
 });
 
-ipcMain.on('get-local-backend-repo-sync', (event) => {
-  event.returnValue = getConfiguredLocalBackendRepoPath();
-});
-
-ipcMain.handle('set-local-backend-repo', (_event, repoPath: string | null) => {
-  const normalized = typeof repoPath === 'string' ? repoPath.trim() : '';
-  writeGuiSettings({ local_backend_repo: normalized });
-});
-
 ipcMain.handle('validate-python', async (_event, pythonPath: string) => {
   if (!pythonPath) return { valid: false, version: null, error: '路径为空' };
   if (!fs.existsSync(pythonPath)) return { valid: false, version: null, error: '文件不存在' };
@@ -521,7 +466,6 @@ app.whenReady().then(() => {
     appRoot,
     resourceRoot,
     BACKEND_PORT,
-    getLocalBackendRepoPath: getConfiguredLocalBackendRepoPath,
     getMainWindow: () => mainWindow,
   });
   initUserPlansDir();

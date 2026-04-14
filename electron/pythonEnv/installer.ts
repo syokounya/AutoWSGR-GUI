@@ -124,6 +124,13 @@ interface UpdateCheckResult {
   remoteUrl: string;
 }
 
+function resolveLocalBackendRepoFromEnv(): string | null {
+  const candidate = (process.env.AUTOWSGR_LOCAL_BACKEND || '').trim();
+  if (!candidate) return null;
+  const pkgInit = path.join(candidate, 'autowsgr', '__init__.py');
+  return fs.existsSync(pkgInit) ? candidate : null;
+}
+
 /** 检查 autowsgr 包是否有可用更新 (对比本地已安装版本与 PyPI 最新版) */
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
   const result: UpdateCheckResult = {
@@ -184,13 +191,18 @@ export async function installDependencies(pythonCmd: string): Promise<{ success:
   return new Promise((resolve) => {
     const cwd = ctx.appRoot();
     const targetDir = localSitePackages();
+    const localBackendRepo = resolveLocalBackendRepoFromEnv();
+    const autowsgrSource = localBackendRepo || 'autowsgr';
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    if (localBackendRepo) {
+      ctx.sendProgress(`检测到本地后端源码，使用本地依赖源: ${localBackendRepo}`);
+    }
     ctx.sendProgress('正在安装后端依赖到项目目录…');
     const proc = spawn(pythonCmd, [
       '-m', 'pip', 'install',
       '--target', targetDir,
       'setuptools',         // provides distutils (removed in Python 3.12)
-      'autowsgr',
+      autowsgrSource,
     ], {
       cwd,
       windowsHide: true,

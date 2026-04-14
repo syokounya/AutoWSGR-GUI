@@ -25,8 +25,8 @@ fleet_presets:
     ships:
       - { name: 克劳塞维茨·改, min_level: 100 }
       - { name: T-23·改, min_level: 100 }
-      - { nation: 德国, ship_type: dd, min_level: 100 }
-      - { nation: 德国, ship_type: dd, min_level: 100 }
+      - { nation: 德国, ship_type: dd, min_level: 100, priority: ['吕贝克·改', 'Z17·改', 'Z16·改', 'Z46·改', 'Z31·改', 'Z1·改', 'Z22·改', 'Z21·改'] }
+      - { nation: 德国, ship_type: dd, min_level: 100, priority: ['吕贝克·改', 'Z17·改', 'Z16·改', 'Z46·改', 'Z31·改', 'Z1·改', 'Z22·改', 'Z21·改'] }
       - { name: 赛尔弗里吉, min_level: 100 }
       - { name: 85工程, min_level: 100 }
   - name: 85工程日系混编
@@ -35,6 +35,6 @@ fleet_presets:
       - { name: 斯佩伯爵海军上将·改, min_level: 100 }
       - { name: 鲃鱼·改, min_level: 100 }
       - { name: 岛风(岛风型驱逐舰)·改, min_level: 100 }
-      - { nation: 日本, ship_type: dd, min_level: 100 }
-      - { nation: 日本, ship_type: dd, min_level: 100 }
+      - { nation: 日本, ship_type: dd, min_level: 100, priority: ['岛风(岛风型驱逐舰)·改', '黑潮·改', '阳炎·改', '早春·改'] }
+      - { nation: 日本, ship_type: dd, min_level: 100, priority: ['岛风(岛风型驱逐舰)·改', '黑潮·改', '阳炎·改', '早春·改'] }
 times: 3

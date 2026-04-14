@@ -243,6 +243,7 @@ export class AppController {
             else if (/\bWARNING\b/i.test(clean)) level = 'warn';
             const msgMatch = clean.match(/\|\s*(?:INFO|WARNING|ERROR)\s*\|\s*\S+\s*\|\s*(.+)/);
             const message = msgMatch ? msgMatch[1].trim() : clean;
+            this.schedulerBinder.handleBackendRuntimeLog(message);
             Logger.logLevel(level, message);
             this.scheduler.processBackendLog(message);
           });

@@ -34,6 +34,29 @@ setup.bat              # 安装便携 Python + autowsgr 依赖
 npm run dev            # 编译 + 启动 Electron
 ```
 
+### 使用本地后端源码联调
+
+如需让 GUI 直接加载本地克隆的后端源码（而非 `python/site-packages` 中的 PyPI 包），可在启动前设置环境变量：
+
+```powershell
+$env:AUTOWSGR_LOCAL_BACKEND = 'E:\AutoWSGR-backend'
+npm run dev
+```
+
+也可在 `gui_settings.json` 中设置：
+
+```json
+{
+  "local_backend_repo": "E:\\AutoWSGR-backend"
+}
+```
+
+说明：
+
+- 启动时会校验 `<local_backend_repo>/autowsgr/__init__.py` 是否存在。
+- `AUTOWSGR_LOCAL_BACKEND` 优先级高于 `gui_settings.json`。
+- 执行“安装依赖”时，若设置了 `AUTOWSGR_LOCAL_BACKEND`，会优先从该本地仓库安装 `autowsgr`。
+
 ## 编写战斗方案
 
 参见 [docs/plan-guide.md](docs/plan-guide.md)，详细说明 YAML 方案的所有关键字和用法。
@@ -42,7 +65,7 @@ npm run dev            # 编译 + 启动 Electron
 
 ## 项目结构
 
-```
+```text
 ├── electron/               # Electron 主进程
 │   ├── main.ts             #   窗口管理、IPC 注册、应用生命周期
 │   ├── preload.ts          #   contextBridge 安全桥接

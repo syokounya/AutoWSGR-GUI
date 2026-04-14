@@ -16,6 +16,7 @@ export interface BackendContext {
   appRoot: () => string;
   resourceRoot: () => string;
   BACKEND_PORT: number;
+  getLocalBackendRepoPath: () => string | null;
   getMainWindow: () => BrowserWindow | null;
 }
 
@@ -92,20 +93,35 @@ export async function startBackend(): Promise<void> {
 
   const cwd = ctx.appRoot();
   const localSite = localSitePackages();
+  const localBackendRepo = ctx.getLocalBackendRepoPath();
+  if (localBackendRepo) {
+    console.log(`[Backend] 本地后端源码优先加载: ${localBackendRepo}`);
+  }
+
+  const pyLiteral = (value: string): string => value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
   // 使用 -c 启动而非 -m uvicorn，以便：
   // 1. 显式注入 site-packages 到 sys.path
   // 2. 激活 setuptools 的 distutils 兼容层 (Python 3.12+ 需要)
   // 3. 绕过嵌入式 Python 的 ._pth/PYTHONPATH 限制
-  const bootstrap = [
+  const bootstrapParts = [
     `import sys, os, site`,
-    `sp = r'${localSite.replace(/'/g, "\\'")}'`,
+  ];
+
+  if (localBackendRepo) {
+    bootstrapParts.push(`local_repo = r'${pyLiteral(localBackendRepo)}'`);
+    bootstrapParts.push(`sys.path.insert(0, local_repo)`);
+  }
+
+  bootstrapParts.push(
+    `sp = r'${pyLiteral(localSite)}'`,
     `sys.path.insert(0, sp)`,
     `site.addsitedir(sp)`,  // 处理 .pth 文件，激活 _distutils_hack
     `import uvicorn`,
     `uvicorn.run('autowsgr.server.main:app', host='127.0.0.1', port=${ctx.BACKEND_PORT})`,
+  );
 
-  ].join('; ');
+  const bootstrap = bootstrapParts.join('; ');
 
   // 将内置 ADB 目录加入 PATH，使后端 shutil.which('adb') 能找到
   const adbDir = path.join(ctx.appRoot(), 'adb');

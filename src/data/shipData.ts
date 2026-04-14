@@ -204,7 +204,7 @@ export function resolveFleetPresetRules(ships: ShipSlot[]): Array<string | Fleet
 
     const rule: FleetRuleReq = { candidates };
     if (slot.name) {
-      const searchName = String(slot.name).trim();
+      const searchName = toBackendName(String(slot.name));
       if (searchName) rule.search_name = searchName;
     }
     if (slot.min_level != null && Number.isFinite(slot.min_level)) {

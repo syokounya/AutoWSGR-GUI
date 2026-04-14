@@ -140,6 +140,41 @@ stop_condition:
   loot_count_ge: 50
 ```
 
+### 编队预设与模糊选船 (fleet_presets)
+
+常规战斗支持在方案里写 `fleet_presets`，每个槽位可写为固定舰名（字符串）或模糊筛选对象。
+
+模糊筛选对象常用字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `name` | 字符串 | 指定舰名（可写改造名） |
+| `nation` | 字符串 | 国籍筛选，如 `日本`、`德国` |
+| `ship_type` | 字符串 | 舰种筛选，如 `dd`、`ss` |
+| `min_level` | 数字 | 最低等级 |
+| `max_level` | 数字 | 最高等级 |
+| `priority` | 字符串列表 | 候选优先顺序（按顺序尝试） |
+
+示例：
+
+```yaml
+fleet_presets:
+  - name: 岛风日驱队
+    ships:
+      - { name: 岛风(岛风型驱逐舰)·改, min_level: 100 }
+      - {
+          nation: 日本,
+          ship_type: dd,
+          min_level: 100,
+          priority: [岛风(岛风型驱逐舰)·改, 黑潮·改, 阳炎·改, 早春·改]
+        }
+```
+
+说明：
+
+- `priority` 建议直接写在 YAML 中，便于按任务场景维护。
+- 当同一编队有多个同类模糊槽位时，可重复写同一组 `priority`；系统会自动跳过已被前序槽位占用的舰船。
+
 ---
 
 ## 节点配置 (node_defaults / node_args)

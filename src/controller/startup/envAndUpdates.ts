@@ -94,12 +94,17 @@ export async function checkForUpdates(bridge: ElectronBridge, host: StartupHost)
     return;
   }
 
+  /*
+   * 测试期接口（后端源码更新）已停用，逻辑保留便于回滚恢复。
   try {
     const updates = await bridge.checkUpdates();
     if (updates.hasUpdates) {
       Logger.warn(`发现 ${updates.behindCount} 个新提交可更新，可通过「配置 → 检查更新」拉取`);
     }
-  } catch { /* 忽略 */ }
+  } catch {
+    // 忽略
+  }
+  */
 }
 
 /** 初始化 GUI 自动更新监听 + 首次检查 */

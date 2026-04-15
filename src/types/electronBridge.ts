@@ -19,6 +19,8 @@ export interface ElectronBridge {
     missingPackages: string[];
     allReady: boolean;
   }>;
+  /*
+   * 测试期接口（后端源码更新）已停用，类型保留便于回滚恢复。
   checkUpdates: () => Promise<{
     gitAvailable: boolean;
     hasUpdates: boolean;
@@ -26,8 +28,12 @@ export interface ElectronBridge {
     behindCount: number;
     remoteUrl: string;
   }>;
+  */
   installDeps: () => Promise<{ success: boolean; output: string }>;
+  /*
+   * 测试期接口（后端源码更新）已停用，类型保留便于回滚恢复。
   pullUpdates: () => Promise<{ success: boolean; output: string }>;
+  */
   startBackend: () => Promise<{ success: boolean; message: string }>;
   runSetup: () => Promise<{ success: boolean; output: string }>;
   installPortablePython: () => Promise<{ success: boolean }>;

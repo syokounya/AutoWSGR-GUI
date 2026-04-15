@@ -350,9 +350,12 @@ ipcMain.handle('check-environment', async () => {
   return await checkEnvironment();
 });
 
+/*
+ * 测试期接口（后端源码更新）已停用，逻辑保留便于回滚恢复。
 ipcMain.handle('check-updates', async () => {
   return await checkForUpdates();
 });
+*/
 
 ipcMain.handle('install-deps', async () => {
   const pythonCmd = await findPython();
@@ -368,9 +371,12 @@ ipcMain.handle('install-portable-python', async () => {
   return installPortablePython();
 });
 
+/*
+ * 测试期接口（后端源码更新）已停用，逻辑保留便于回滚恢复。
 ipcMain.handle('pull-updates', async () => {
   return pullUpdates();
 });
+*/
 
 ipcMain.handle('start-backend', async () => {
   if (getBackendProcess()) return { success: true, message: '后端已在运行' };

@@ -80,17 +80,23 @@ contextBridge.exposeInMainWorld('electronBridge', {
     return ipcRenderer.invoke('check-environment');
   },
 
+  /*
+   * 测试期接口（后端源码更新）已停用，逻辑保留便于回滚恢复。
   checkUpdates: () => {
     return ipcRenderer.invoke('check-updates');
   },
+  */
 
   installDeps: () => {
     return ipcRenderer.invoke('install-deps');
   },
 
+  /*
+   * 测试期接口（后端源码更新）已停用，逻辑保留便于回滚恢复。
   pullUpdates: () => {
     return ipcRenderer.invoke('pull-updates');
   },
+  */
 
   startBackend: () => {
     return ipcRenderer.invoke('start-backend');

@@ -464,6 +464,8 @@ export class AppController {
     }
 
     try {
+      /*
+       * 测试期接口（后端源码更新）已停用，逻辑保留便于回滚恢复。
       try {
         const updates = await bridge.checkUpdates();
         if (updates.hasUpdates) {
@@ -487,6 +489,8 @@ export class AppController {
       } catch {
         Logger.warn('后端更新检查失败');
       }
+      */
+      Logger.info('已跳过后端源码更新检查（测试接口已停用）');
 
       try {
         const guiUpdate = await bridge.checkGuiUpdates?.();

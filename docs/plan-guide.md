@@ -132,12 +132,14 @@ repair_mode: [2, 2, 2, 1, 2, 2]  # 4号位中破就修，其余大破才修
 |------|------|------|
 | `loot_count_ge` | 数字 | 战利品数量 ≥ 该值时停止 |
 | `ship_count_ge` | 数字 | 获取舰船数量 ≥ 该值时停止 |
+| `node_count_ge` | 数字 | 本次战斗发生战斗的节点数 ≥ 该值时停止 |
 
 示例：
 
 ```yaml
 stop_condition:
   loot_count_ge: 50
+  node_count_ge: 5
 ```
 
 ### 编队预设与模糊选船 (fleet_presets)
